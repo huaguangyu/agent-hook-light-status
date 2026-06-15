@@ -1,0 +1,44 @@
+{
+  "agent-light": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "node /absolute/path/to/agent_light/collector/antigravity/antigravity-hook.js PreInvocation"
+      }
+    ],
+    "PostInvocation": [
+      {
+        "type": "command",
+        "command": "node /absolute/path/to/agent_light/collector/antigravity/antigravity-hook.js PostInvocation"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/agent_light/collector/antigravity/antigravity-hook.js PreToolUse"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/agent_light/collector/antigravity/antigravity-hook.js PostToolUse"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node /absolute/path/to/agent_light/collector/antigravity/antigravity-hook.js Stop"
+      }
+    ]
+  }
+}

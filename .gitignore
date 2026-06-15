@@ -1,0 +1,50 @@
+# macOS / editor noise
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Local agent/editor settings
+.claude/
+.codex/
+.agents/
+
+# Go build/test cache used by local sandboxed checks
+.gocache/
+
+# Go server build artifacts and runtime state
+server/build/
+server/dist/
+server/run/
+server/*.log
+server/*.pid
+
+# Temporary binaries
+agent-light-server
+/tmp/
+
+# Node dependencies if tooling is added later
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and secret files
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+*.token
+
+# PlatformIO / firmware generated files
+firmware/.pio/
+firmware/.vscode/.browse.c_cpp.db*
+firmware/.vscode/ipch/
+firmware/compile_commands.json
+
+# Python/tool caches that may be created by helper scripts
+.pytest_cache/
+__pycache__/
+*.py[cod]
