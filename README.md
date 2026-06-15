@@ -14,7 +14,7 @@ Agent Light 是一个面向编程工具状态灯的统一方案。它接收 Code
 6. [三家 hooks 配置](#三家-hooks-配置)
 7. [统一事件与 API](#统一事件与-api)
 8. [状态映射](#状态映射)
-9. [环境变量](#环境变量)
+9. [运行配置](#运行配置)
 10. [本地测试](#本地测试)
 11. [故障排查](#故障排查)
 12. [项目规划](#项目规划)
@@ -187,8 +187,8 @@ cd /Users/apple/user/VscodeProject/agent_light/server
 ```text
 server/build/darwin-arm64/agent-light-server
 server/build/linux-amd64/agent-light-server
-server/dist/agent-light-server-darwin-arm64.tar.gz
-server/dist/agent-light-server-linux-amd64.tar.gz
+server/dist/agent-light-server-darwin-arm64
+server/dist/agent-light-server-linux-amd64
 ```
 
 注意：Go 版服务端如果没有指定 token，每次启动都会随机生成 `Collector token` 和 `Device token`。后台启动时会打印一次，之后也可以通过 `server status` 查看当前运行中的 token：
@@ -220,6 +220,13 @@ collector 的 `AGENT_LIGHT_COLLECTOR_TOKEN`、设备查询的 `AGENT_LIGHT_DEVIC
 ```
 
 服务端完整使用方法见 [`server/README.md`](server/README.md)。
+
+CI/CD 自动构建见 [`BUILD.md`](BUILD.md)。推送 `v*` tag 会自动构建 `darwin-arm64` 和 `linux-amd64`，并把带平台后缀的二进制文件附加到 GitHub Release：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ### 3. 装全局 hooks
 

@@ -8,7 +8,9 @@ APP_NAME="agent-light-server"
 
 build_one() {
   local target="$1"
+  local normalized_target="$target"
   local out_dir="build/${target}"
+  local dist_file
 
   rm -rf "$out_dir"
   mkdir -p "$out_dir" dist
@@ -22,7 +24,7 @@ build_one() {
     linux-amd64|linux-x64)
       CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
         go build -trimpath -ldflags="-s -w" -o "${out_dir}/${APP_NAME}" .
-      target="linux-amd64"
+      normalized_target="linux-amd64"
       ;;
 
     *)
@@ -32,8 +34,10 @@ build_one() {
       ;;
   esac
 
-  tar -C "$out_dir" -czf "dist/${APP_NAME}-${target}.tar.gz" "$APP_NAME"
-  echo "已生成 dist/${APP_NAME}-${target}.tar.gz"
+  dist_file="dist/${APP_NAME}-${normalized_target}"
+  cp "${out_dir}/${APP_NAME}" "$dist_file"
+  chmod +x "$dist_file"
+  echo "已生成 ${dist_file}"
 }
 
 target="${1:-all}"

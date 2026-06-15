@@ -158,8 +158,8 @@ chmod +x build.sh
 产物：
 
 ```text
-dist/agent-light-server-darwin-arm64.tar.gz
-dist/agent-light-server-linux-amd64.tar.gz
+dist/agent-light-server-darwin-arm64
+dist/agent-light-server-linux-amd64
 ```
 
 也可以单独编译：
@@ -174,10 +174,10 @@ dist/agent-light-server-linux-amd64.tar.gz
 
 | 命令 | 说明 | 输出 |
 | --- | --- | --- |
-| `./build.sh all` | 同时构建 mac arm64 和 linux x64 | `dist/agent-light-server-darwin-arm64.tar.gz`、`dist/agent-light-server-linux-amd64.tar.gz` |
-| `./build.sh darwin-arm64` | 只构建 Apple Silicon macOS | `build/darwin-arm64/agent-light-server` |
-| `./build.sh linux-amd64` | 只构建 Linux x64 | `build/linux-amd64/agent-light-server` |
-| `./build.sh linux-x64` | `linux-amd64` 的别名 | `build/linux-amd64/agent-light-server` |
+| `./build.sh all` | 同时构建 mac arm64 和 linux x64 | `dist/agent-light-server-darwin-arm64`、`dist/agent-light-server-linux-amd64` |
+| `./build.sh darwin-arm64` | 只构建 Apple Silicon macOS | `dist/agent-light-server-darwin-arm64` |
+| `./build.sh linux-amd64` | 只构建 Linux x64 | `dist/agent-light-server-linux-amd64` |
+| `./build.sh linux-x64` | `linux-amd64` 的别名 | `dist/agent-light-server-linux-amd64` |
 
 ## 环境变量
 
