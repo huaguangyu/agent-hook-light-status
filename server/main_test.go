@@ -68,6 +68,9 @@ func TestPostStatusAndEvents(t *testing.T) {
 	if status.State != "approval" || status.Color != "red" || status.Effect != "fast_blink" {
 		t.Fatalf("unexpected status: %+v", status)
 	}
+	if status.Light.Intent != "approval" || status.Light.Primary != "#EF4444" || status.Light.Priority != 90 {
+		t.Fatalf("unexpected light intent: %+v", status.Light)
+	}
 	if len(status.Details) == 0 {
 		t.Fatalf("details should be included")
 	}
@@ -114,6 +117,60 @@ func TestIdleTTL(t *testing.T) {
 	}
 	if status.State != "idle" || status.Message != "空闲（超时未更新）" {
 		t.Fatalf("unexpected expired status: %+v", status)
+	}
+	if status.Light.Intent != "idle" {
+		t.Fatalf("expired status should include idle light intent: %+v", status.Light)
+	}
+}
+
+func TestStatusDisplayProfile(t *testing.T) {
+	s := newTestServer()
+	body := []byte(`{"source":"manual","state":"busy","event":"ManualTest","message":"忙碌"}`)
+
+	post := httptest.NewRequest(http.MethodPost, "/api/devices/workspace/events", bytes.NewReader(body))
+	post.Header.Set("Authorization", "Bearer "+testCollectorToken)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, post)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("post status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/devices/workspace/status?displayId=desk-ring-12", nil)
+	req.Header.Set("Authorization", "Bearer "+testDeviceToken)
+	statusRec := httptest.NewRecorder()
+	s.ServeHTTP(statusRec, req)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("status status = %d, body = %s", statusRec.Code, statusRec.Body.String())
+	}
+
+	var status StatusResponse
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Light.Intent != "busy" || status.Light.Density != 3 {
+		t.Fatalf("unexpected busy light intent: %+v", status.Light)
+	}
+	if status.Display == nil || status.Display.ID != "desk-ring-12" || status.Display.Layout != "ring12" || status.Display.Pixels != 12 {
+		t.Fatalf("unexpected display profile: %+v", status.Display)
+	}
+}
+
+func TestStatusExplicitLayout(t *testing.T) {
+	s := newTestServer()
+	req := httptest.NewRequest(http.MethodGet, "/api/devices/workspace/status?displayId=desk-main&layout=matrix4x4", nil)
+	req.Header.Set("Authorization", "Bearer "+testDeviceToken)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var status StatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Display == nil || status.Display.Layout != "matrix4x4" || status.Display.Pixels != 16 || status.Display.Width != 4 || status.Display.Height != 4 {
+		t.Fatalf("unexpected display profile: %+v", status.Display)
 	}
 }
 

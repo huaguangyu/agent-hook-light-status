@@ -46,6 +46,77 @@ var lightEffects = map[string]LightEffect{
 	"approval": {Color: "red", Effect: "fast_blink"},
 }
 
+var lightIntents = map[string]LightIntent{
+	"idle": {
+		Intent:     "idle",
+		Primary:    "#22C55E",
+		Secondary:  "#14B8A6",
+		Brightness: 45,
+		Speed:      25,
+		Density:    1,
+		Priority:   0,
+	},
+	"thinking": {
+		Intent:     "thinking",
+		Primary:    "#FACC15",
+		Secondary:  "#38BDF8",
+		Brightness: 95,
+		Speed:      55,
+		Density:    1,
+		Priority:   20,
+	},
+	"busy": {
+		Intent:     "busy",
+		Primary:    "#3B82F6",
+		Secondary:  "#8B5CF6",
+		Brightness: 120,
+		Speed:      90,
+		Density:    3,
+		Priority:   30,
+	},
+	"approval": {
+		Intent:     "approval",
+		Primary:    "#EF4444",
+		Secondary:  "#F97316",
+		Brightness: 190,
+		Speed:      140,
+		Density:    4,
+		Priority:   90,
+	},
+}
+
+var displayLayouts = map[string]DisplayProfile{
+	"pixel1": {
+		Layout:      "pixel1",
+		Pixels:      1,
+		Description: "single status pixel",
+	},
+	"matrix2x2": {
+		Layout:      "matrix2x2",
+		Pixels:      4,
+		Width:       2,
+		Height:      2,
+		Description: "2x2 square matrix",
+	},
+	"matrix4x4": {
+		Layout:      "matrix4x4",
+		Pixels:      16,
+		Width:       4,
+		Height:      4,
+		Description: "4x4 square matrix",
+	},
+	"ring12": {
+		Layout:      "ring12",
+		Pixels:      12,
+		Description: "12 pixel ring",
+	},
+	"bar6": {
+		Layout:      "bar6",
+		Pixels:      6,
+		Description: "6 pixel bar",
+	},
+}
+
 type Config struct {
 	Host                    string
 	Port                    int
@@ -68,6 +139,26 @@ type Server struct {
 type LightEffect struct {
 	Color  string
 	Effect string
+}
+
+type LightIntent struct {
+	Intent     string `json:"intent"`
+	Primary    string `json:"primary"`
+	Secondary  string `json:"secondary"`
+	Brightness int    `json:"brightness"`
+	Speed      int    `json:"speed"`
+	Density    int    `json:"density"`
+	Priority   int    `json:"priority"`
+	TTLMS      int64  `json:"ttlMs"`
+}
+
+type DisplayProfile struct {
+	ID          string `json:"id,omitempty"`
+	Layout      string `json:"layout"`
+	Pixels      int    `json:"pixels"`
+	Width       int    `json:"width,omitempty"`
+	Height      int    `json:"height,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 type IncomingEvent struct {
@@ -102,6 +193,8 @@ type StatusResponse struct {
 	State     string          `json:"state"`
 	Color     string          `json:"color"`
 	Effect    string          `json:"effect"`
+	Light     LightIntent     `json:"light"`
+	Display   *DisplayProfile `json:"display,omitempty"`
 	Message   string          `json:"message"`
 	Source    *string         `json:"source"`
 	Event     *string         `json:"event"`
@@ -349,7 +442,7 @@ func (s *Server) handlePostEvent(w http.ResponseWriter, r *http.Request, deviceI
 	s.mu.Lock()
 	s.devices[deviceID] = state
 	s.rememberEventLocked(deviceID, state, updatedAt, updatedAtMs)
-	status := s.resolveStatusLocked(&state, false)
+	status := s.resolveStatusLocked(&state, false, nil)
 	s.mu.Unlock()
 
 	sendJSON(w, http.StatusOK, PostEventResponse{OK: true, DeviceID: deviceID, Status: status})
@@ -362,13 +455,14 @@ func (s *Server) handleGetStatus(w http.ResponseWriter, r *http.Request, deviceI
 	}
 
 	includeDetails := r.URL.Query().Get("details") == "1"
+	display := displayFromQuery(r.URL.Query())
 	s.mu.RLock()
 	state, ok := s.devices[deviceID]
 	var statePtr *DeviceState
 	if ok {
 		statePtr = &state
 	}
-	status := s.resolveStatusLocked(statePtr, includeDetails)
+	status := s.resolveStatusLocked(statePtr, includeDetails, display)
 	s.mu.RUnlock()
 
 	sendJSON(w, http.StatusOK, status)
@@ -417,7 +511,73 @@ func (s *Server) rememberEventLocked(deviceID string, state DeviceState, receive
 	s.recentEvents[deviceID] = events
 }
 
-func (s *Server) resolveStatusLocked(deviceState *DeviceState, includeDetails bool) StatusResponse {
+func lightIntentForState(state string, ttl time.Duration) LightIntent {
+	intent, ok := lightIntents[state]
+	if !ok {
+		intent = lightIntents["idle"]
+	}
+	intent.TTLMS = ttl.Milliseconds()
+	return intent
+}
+
+func displayFromQuery(values url.Values) *DisplayProfile {
+	displayID := strings.TrimSpace(values.Get("displayId"))
+	layout := normalizeLayout(values.Get("layout"))
+	if layout == "" {
+		layout = inferLayout(displayID)
+	}
+	if layout == "" {
+		return nil
+	}
+
+	profile, ok := displayLayouts[layout]
+	if !ok {
+		return nil
+	}
+	profile.ID = displayID
+	return &profile
+}
+
+func normalizeLayout(layout string) string {
+	value := strings.ToLower(strings.TrimSpace(layout))
+	value = strings.ReplaceAll(value, "-", "")
+	value = strings.ReplaceAll(value, "_", "")
+	switch value {
+	case "pixel1", "single", "dot", "one":
+		return "pixel1"
+	case "matrix2x2", "2x2", "square2x2":
+		return "matrix2x2"
+	case "matrix4x4", "4x4", "square4x4":
+		return "matrix4x4"
+	case "ring12", "12ring", "circle12":
+		return "ring12"
+	case "bar6", "6bar", "strip6":
+		return "bar6"
+	default:
+		return ""
+	}
+}
+
+func inferLayout(displayID string) string {
+	value := strings.ToLower(displayID)
+	compact := strings.NewReplacer("-", "", "_", "", " ", "").Replace(value)
+	switch {
+	case strings.Contains(value, "4x4"), strings.Contains(compact, "matrix4"):
+		return "matrix4x4"
+	case strings.Contains(value, "2x2"), strings.Contains(compact, "matrix2"):
+		return "matrix2x2"
+	case strings.Contains(compact, "ring12"), strings.Contains(compact, "12ring"), strings.Contains(compact, "circle12"):
+		return "ring12"
+	case strings.Contains(compact, "bar6"), strings.Contains(compact, "6bar"), strings.Contains(compact, "strip6"):
+		return "bar6"
+	case strings.Contains(compact, "single"), strings.Contains(compact, "pixel1"), strings.Contains(compact, "dot"):
+		return "pixel1"
+	default:
+		return ""
+	}
+}
+
+func (s *Server) resolveStatusLocked(deviceState *DeviceState, includeDetails bool, display *DisplayProfile) StatusResponse {
 	now := time.Now()
 	expired := deviceState == nil || deviceState.UpdatedAtMs == 0 || now.UnixMilli()-deviceState.UpdatedAtMs > s.cfg.IdleTTL.Milliseconds()
 	if expired {
@@ -437,10 +597,13 @@ func (s *Server) resolveStatusLocked(deviceState *DeviceState, includeDetails bo
 		}
 
 		light := lightEffects["idle"]
+		intent := lightIntentForState("idle", s.cfg.IdleTTL)
 		return StatusResponse{
 			State:     "idle",
 			Color:     light.Color,
 			Effect:    light.Effect,
+			Light:     intent,
+			Display:   display,
 			Message:   message,
 			Source:    source,
 			Event:     event,
@@ -452,6 +615,7 @@ func (s *Server) resolveStatusLocked(deviceState *DeviceState, includeDetails bo
 	if !ok {
 		light = lightEffects["idle"]
 	}
+	intent := lightIntentForState(deviceState.State, s.cfg.IdleTTL)
 	source := deviceState.Source
 	if source == "" {
 		source = "unknown"
@@ -461,6 +625,8 @@ func (s *Server) resolveStatusLocked(deviceState *DeviceState, includeDetails bo
 		State:     deviceState.State,
 		Color:     light.Color,
 		Effect:    light.Effect,
+		Light:     intent,
+		Display:   display,
 		Message:   deviceState.Message,
 		Source:    &source,
 		Event:     deviceState.Event,

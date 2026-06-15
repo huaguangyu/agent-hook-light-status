@@ -203,6 +203,27 @@ dist/agent-light-server-linux-amd64
 
 每个 `deviceId` 都独立保留最近 `AGENT_LIGHT_MAX_RECENT_EVENTS` 条事件，默认 100 条。不同 `deviceId` 的状态和事件不会混在一起。
 
+如果同一个状态通道要同时驱动多个物理显示设备，可以让 hooks 继续上报同一个 `deviceId`，设备查询时追加 `displayId` 或 `layout`：
+
+```text
+/api/devices/workspace/status?displayId=desk-ring-12
+/api/devices/workspace/status?displayId=desk-matrix-4x4
+/api/devices/workspace/status?displayId=mini-2x2
+/api/devices/workspace/status?displayId=single-dot
+/api/devices/workspace/status?displayId=bar-6
+/api/devices/workspace/status?displayId=desk-main&layout=matrix4x4
+```
+
+支持的 `layout`：
+
+| layout | 灯型 | 像素数 | 推荐效果 |
+| --- | --- | --- | --- |
+| `pixel1` | 单个灯 | 1 | 呼吸、快闪、颜色渐变 |
+| `matrix2x2` | 2x2 方形 | 4 | 四象限脉冲、对角呼吸 |
+| `matrix4x4` | 4x4 方形 | 16 | 中心扩散、数据扫描、边框能量场 |
+| `ring12` | 12 环形 | 12 | 旋转能量环、粒子追逐、完成扫圈 |
+| `bar6` | 6 位条形 | 6 | 数据流、进度扫描、流星拖尾 |
+
 ## API
 
 ```text
@@ -218,3 +239,44 @@ GET  /health
 collector 上报：Authorization: Bearer <AGENT_LIGHT_COLLECTOR_TOKEN>
 设备查询：Authorization: Bearer <AGENT_LIGHT_DEVICE_TOKEN>
 ```
+
+`GET /status` 会保留旧的 `color/effect`，并额外返回 `light` 视觉意图。自定义固件应优先读取 `light`：
+
+```json
+{
+  "state": "thinking",
+  "color": "yellow",
+  "effect": "breathing",
+  "light": {
+    "intent": "thinking",
+    "primary": "#FACC15",
+    "secondary": "#38BDF8",
+    "brightness": 95,
+    "speed": 55,
+    "density": 1,
+    "priority": 20,
+    "ttlMs": 1200000
+  },
+  "display": {
+    "id": "desk-ring-12",
+    "layout": "ring12",
+    "pixels": 12,
+    "description": "12 pixel ring"
+  },
+  "message": "Codex 正在思考",
+  "source": "codex",
+  "event": "UserPromptSubmit",
+  "updatedAt": "2026-06-15 14:30:00"
+}
+```
+
+推荐设备端把 `light.intent` 渲染成更有 AI 感的流动效果：
+
+| intent | 推荐动画 |
+| --- | --- |
+| `idle` | `aurora_core`，青绿/蓝紫极光慢漂移 |
+| `thinking` | `quantum_drift`，暖金核心 + 青蓝粒子 |
+| `busy` | `data_stream`，蓝紫高速数据流 + 拖尾 |
+| `approval` | `alert_gate`，红橙能量门快脉冲 |
+| `done` | `holo_bloom`，绿色/青色扩散 |
+| `offline` | `cold_sleep`，暗蓝灰单点慢闪 |

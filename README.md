@@ -568,10 +568,58 @@ Authorization: Bearer <device-token>
   "state": "approval",
   "color": "red",
   "effect": "fast_blink",
+  "light": {
+    "intent": "approval",
+    "primary": "#EF4444",
+    "secondary": "#F97316",
+    "brightness": 190,
+    "speed": 140,
+    "density": 4,
+    "priority": 90,
+    "ttlMs": 1200000
+  },
   "message": "Codex 需要审批",
   "source": "codex",
   "event": "PermissionRequest",
   "updatedAt": "2026-06-13 18:40:46"
+}
+```
+
+多显示设备读取同一个状态通道时，可以追加 `displayId` 或 `layout`：
+
+```http
+GET /api/devices/:deviceId/status?displayId=desk-ring-12
+GET /api/devices/:deviceId/status?displayId=desk-main&layout=matrix4x4
+Authorization: Bearer <device-token>
+```
+
+响应会额外带上 `display`：
+
+```json
+{
+  "state": "busy",
+  "color": "red",
+  "effect": "solid",
+  "light": {
+    "intent": "busy",
+    "primary": "#3B82F6",
+    "secondary": "#8B5CF6",
+    "brightness": 120,
+    "speed": 90,
+    "density": 3,
+    "priority": 30,
+    "ttlMs": 1200000
+  },
+  "display": {
+    "id": "desk-ring-12",
+    "layout": "ring12",
+    "pixels": 12,
+    "description": "12 pixel ring"
+  },
+  "message": "Codex 正在动手",
+  "source": "codex",
+  "event": "PreToolUse",
+  "updatedAt": "2026-06-15 14:30:00"
 }
 ```
 
@@ -605,6 +653,103 @@ Authorization: Bearer <device-token>
 ```http
 GET /health
 ```
+
+## 显示设备与 AI 光效
+
+### 状态通道与显示设备
+
+hooks 只负责更新一个统一状态通道，物理灯只是订阅这个通道的不同显示终端：
+
+```text
+collector -> POST /api/devices/workspace/events
+
+12 环形灯 -> GET /api/devices/workspace/status?displayId=desk-ring-12
+4x4 方阵 -> GET /api/devices/workspace/status?displayId=desk-matrix-4x4
+2x2 方阵 -> GET /api/devices/workspace/status?displayId=mini-2x2
+单个灯   -> GET /api/devices/workspace/status?displayId=single-dot
+6 位条形 -> GET /api/devices/workspace/status?displayId=bar-6
+```
+
+这里 `workspace` 是状态通道，同一用户、同一桌面、同一组 agent 可以共用一个 `deviceId`。`displayId` 是具体显示设备，设备端固件根据自己的灯型渲染。
+
+服务端保留旧字段 `color/effect`，供简单红黄绿灯使用；新设备优先读取 `light` 和 `display`。
+
+### 支持的灯型
+
+| layout | 灯型 | 像素数 | 推荐用途 |
+| --- | --- | --- | --- |
+| `pixel1` | 单个灯 | 1 | 最小状态指示，靠亮度曲线和颜色过渡表现质感 |
+| `matrix2x2` | 2x2 方形 | 4 | 四象限脉冲、对角线呼吸、整体爆闪 |
+| `matrix4x4` | 4x4 方形 | 16 | 中心扩散、低分辨率等离子、边框能量场、数据雨 |
+| `ring12` | 12 环形 | 12 | 旋转能量环、粒子追逐、黑洞吸入、完成扫圈 |
+| `bar6` | 6 位条形 | 6 | 数据流、进度扫描、左右波、流星拖尾 |
+
+`layout` 可以显式传入，也可以通过常见 `displayId` 自动推断：
+
+```text
+desk-ring-12       -> ring12
+desk-matrix-4x4    -> matrix4x4
+mini-2x2           -> matrix2x2
+single-dot         -> pixel1
+bar-6 / strip-6    -> bar6
+```
+
+### 光效字段
+
+`light` 是服务端给设备端的视觉意图，不直接指定每颗灯珠颜色。设备端固件按自己的 `layout` 实现具体动画。
+
+| 字段 | 说明 |
+| --- | --- |
+| `intent` | 当前语义状态，如 `idle`、`thinking`、`busy`、`approval` |
+| `primary` | 主色，通常用于主体光流 |
+| `secondary` | 辅色，通常用于拖尾、背景辉光或对比层 |
+| `brightness` | 建议亮度，0-255，设备可按硬件限制再压低 |
+| `speed` | 建议动画速度，0-255 |
+| `density` | 粒子、亮点、扫描线密度 |
+| `priority` | 状态优先级，设备端可用它决定是否打断当前动画 |
+| `ttlMs` | 服务端状态 TTL，设备端可用它判断离线/过期降级 |
+
+后续固件可以扩展更多字段：
+
+| 字段 | 用途 |
+| --- | --- |
+| `animation` | 指定动画算法，如 `quantum_drift`、`data_stream` |
+| `palette` | 指定调色板，如 `ai_nebula`、`ai_focus` |
+| `accent` | 点缀色，适合白色星点、红橙核心、紫色边缘光 |
+| `trail` | 拖尾长度或残影强度 |
+| `glow` | 背景辉光强度 |
+| `sparkle` | 星尘/粒子闪烁密度 |
+| `direction` | 环形/条形流动方向，如 `cw`、`ccw`、`left`、`right` |
+
+### AI 风格动画
+
+目标不是普通红黄绿状态灯，而是“AI 正在流动”的桌面装置感：低亮、柔和、带拖尾、带层次，在需要用户注意时才明显提醒。
+
+| 状态 | 动画名 | 氛围 | 推荐颜色 |
+| --- | --- | --- | --- |
+| `idle` | `aurora_core` | 青绿/蓝紫极光缓慢漂移，像在线但安静的核心 | `#22C55E` + `#14B8A6` + 暗蓝背景 |
+| `SessionStart` | `neural_wake` | 白蓝光从中心或起点扩散，像神经网络被唤醒 | `#E0F2FE` + `#38BDF8` + `#A78BFA` |
+| `thinking` | `quantum_drift` | 暖金核心 + 青蓝微粒慢速漂移，有呼吸和星尘 | `#FACC15` + `#38BDF8` + `#A78BFA` |
+| `busy` | `data_stream` | 蓝紫高速数据流，带拖尾、扫描和轻微闪点 | `#3B82F6` + `#8B5CF6` + 柔白拖尾 |
+| `approval` | `alert_gate` | 红橙能量门快速脉冲，中间夹白色闪点 | `#EF4444` + `#F97316` + 白色闪点 |
+| `done` | `holo_bloom` | 绿色/青色扩散一圈，然后柔和回到 idle | `#22C55E` + `#2DD4BF` + 柔白 |
+| `error` | `red_singularity` | 深红收缩/爆闪 2-3 次，然后暗红余辉 | `#DC2626` + `#7F1D1D` + `#FCA5A5` |
+| `offline` | `cold_sleep` | 暗蓝灰单点慢闪，像休眠舱 | `#334155` + `#94A3B8` |
+
+### 不同灯型的动画实现
+
+同一个 `intent` 在不同灯型上应该保持同一气质，但动画算法可以完全不同。
+
+| intent | `pixel1` | `matrix2x2` | `matrix4x4` | `bar6` | `ring12` |
+| --- | --- | --- | --- | --- | --- |
+| `idle` | 青绿低亮慢呼吸 | 四颗同步低亮呼吸 | 四角微亮 + 中心暗蓝漂移 | 中间两颗低亮呼吸 | 极光色慢速绕环 |
+| `thinking` | 暖金呼吸 + 青色闪点 | 四象限顺序脉冲 | 中心向外扩散波纹 + 星点 | 双向柔和来回流动 | 单点慢旋转 + 柔和拖尾 |
+| `busy` | 蓝紫微闪 | 顺时针轮转 | 横向/纵向数据扫描线 | 蓝紫数据流向右滑动 | 三点追逐 + 紫色残影 |
+| `approval` | 红橙快脉冲 | 全体红橙双闪 | 边框红橙闪烁 + 中心白点 | 全条快闪 + 两端白点 | 红橙双向脉冲 |
+| `done` | 绿色柔闪一次 | 由暗到亮再回落 | 中心绿色扩散 | 从左到右扫过 | 绿色扫一圈 |
+| `offline` | 暗蓝灰慢闪 | 单角慢闪 | 单点慢闪 | 第一颗慢闪 | 单点慢闪 |
+
+设备端固件建议用 FastLED / Adafruit NeoPixel 实现。FastLED 更适合做调色板、噪声、拖尾和多层动画；Adafruit NeoPixel 更简单稳定，适合先把硬件跑通。
 
 ## 状态映射
 
