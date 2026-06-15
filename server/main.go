@@ -105,6 +105,13 @@ var displayLayouts = map[string]DisplayProfile{
 		Height:      4,
 		Description: "4x4 square matrix",
 	},
+	"matrix8x8": {
+		Layout:      "matrix8x8",
+		Pixels:      64,
+		Width:       8,
+		Height:      8,
+		Description: "8x8 square matrix",
+	},
 	"ring12": {
 		Layout:      "ring12",
 		Pixels:      12,
@@ -549,6 +556,8 @@ func normalizeLayout(layout string) string {
 		return "matrix2x2"
 	case "matrix4x4", "4x4", "square4x4":
 		return "matrix4x4"
+	case "matrix8x8", "8x8", "square8x8":
+		return "matrix8x8"
 	case "ring12", "12ring", "circle12":
 		return "ring12"
 	case "bar6", "6bar", "strip6":
@@ -562,6 +571,8 @@ func inferLayout(displayID string) string {
 	value := strings.ToLower(displayID)
 	compact := strings.NewReplacer("-", "", "_", "", " ", "").Replace(value)
 	switch {
+	case strings.Contains(value, "8x8"), strings.Contains(compact, "matrix8"):
+		return "matrix8x8"
 	case strings.Contains(value, "4x4"), strings.Contains(compact, "matrix4"):
 		return "matrix4x4"
 	case strings.Contains(value, "2x2"), strings.Contains(compact, "matrix2"):

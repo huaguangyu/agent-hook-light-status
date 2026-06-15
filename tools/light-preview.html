@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Light 灯效模拟器</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b14;
+      --panel: #101827;
+      --panel-2: #0d1422;
+      --line: #243044;
+      --text: #e6eefc;
+      --muted: #91a2bd;
+      --accent: #38bdf8;
+      --ok: #22c55e;
+      --warn: #facc15;
+      --hot: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 28% 16%, rgba(56, 189, 248, .12), transparent 34%),
+        radial-gradient(circle at 80% 20%, rgba(167, 139, 250, .10), transparent 30%),
+        var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 24px 0 34px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 26px;
+      font-weight: 740;
+      letter-spacing: 0;
+    }
+
+    .sub {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1.4fr .9fr auto auto auto;
+      gap: 10px;
+      align-items: end;
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: rgba(16, 24, 39, .88);
+      border-radius: 8px;
+    }
+
+    label {
+      display: block;
+      color: #cbd7eb;
+      font-size: 12px;
+      margin: 0 0 6px;
+    }
+
+    input, select, button {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #0b1220;
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      padding: 8px 10px;
+    }
+
+    button {
+      background: #1f2a44;
+      cursor: pointer;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #06111f;
+    }
+
+    .status {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 12px 0 18px;
+    }
+
+    .metric {
+      min-height: 64px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      background: rgba(13, 20, 34, .9);
+      border-radius: 8px;
+    }
+
+    .metric b {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 560;
+    }
+
+    .metric span {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 15px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .ambient-card {
+      grid-column: 1 / -1;
+    }
+
+    .ambient-stage {
+      display: grid;
+      place-items: center;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      background: rgba(16, 24, 39, .86);
+      border-radius: 8px;
+      padding: 12px;
+      min-width: 0;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .badge {
+      color: var(--muted);
+      font-size: 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 6px;
+      background: #050913;
+    }
+
+    .wide canvas { aspect-ratio: 1.75; }
+
+    .ambient-card canvas {
+      width: min(860px, 100%);
+      aspect-ratio: 16 / 9;
+      border-radius: 14px;
+      background: #fbfcff;
+      box-shadow: 0 18px 52px rgba(0, 0, 0, .3);
+    }
+
+    pre {
+      max-height: 220px;
+      overflow: auto;
+      margin: 14px 0 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #060a12;
+      color: #b8c7dd;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 900px) {
+      .toolbar { grid-template-columns: 1fr; }
+      .status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Agent Light 灯效模拟器</h1>
+  <p class="sub">每 1 秒读取一次远程状态，并把同一个 <code>light.intent</code> 渲染到 8x8、12 环、4x4、2x2、6 条、单灯几种灯板上。</p>
+
+  <section class="toolbar">
+    <div>
+      <label for="url">Status URL</label>
+      <input id="url" value="http://light.woogua.com/api/devices/desk-light-01/status">
+    </div>
+    <div>
+      <label for="token">Device token</label>
+      <input id="token" type="password" placeholder="Bearer token，不会写进项目文件">
+    </div>
+    <button id="save" class="primary">保存并开始</button>
+    <button id="once">立即刷新</button>
+    <div>
+      <label for="manual">手动预览</label>
+      <select id="manual">
+        <option value="">跟随远程</option>
+        <option value="idle">idle</option>
+        <option value="thinking">thinking</option>
+        <option value="busy">busy</option>
+        <option value="approval">approval</option>
+        <option value="offline">offline</option>
+      </select>
+    </div>
+  </section>
+
+  <section class="status">
+    <div class="metric"><b>state</b><span id="m-state">-</span></div>
+    <div class="metric"><b>intent</b><span id="m-intent">-</span></div>
+    <div class="metric"><b>event</b><span id="m-event">-</span></div>
+    <div class="metric"><b>updated</b><span id="m-updated">-</span></div>
+  </section>
+
+  <section class="grid">
+    <article class="card ambient-card">
+      <div class="card-head"><h2>网页端炫彩呼吸光场</h2><span class="badge">ambient-field</span></div>
+      <div class="ambient-stage">
+        <canvas id="vibeScreen" width="960" height="540"></canvas>
+      </div>
+    </article>
+    <article class="card">
+      <div class="card-head"><h2>8x8 方阵</h2><span class="badge">matrix8x8</span></div>
+      <canvas id="matrix8" width="360" height="360"></canvas>
+    </article>
+    <article class="card">
+      <div class="card-head"><h2>12 环形</h2><span class="badge">ring12</span></div>
+      <canvas id="ring12" width="360" height="360"></canvas>
+    </article>
+    <article class="card">
+      <div class="card-head"><h2>4x4 方阵</h2><span class="badge">matrix4x4</span></div>
+      <canvas id="matrix4" width="360" height="360"></canvas>
+    </article>
+    <article class="card">
+      <div class="card-head"><h2>2x2 方阵</h2><span class="badge">matrix2x2</span></div>
+      <canvas id="matrix2" width="360" height="360"></canvas>
+    </article>
+    <article class="card wide">
+      <div class="card-head"><h2>6 位条形</h2><span class="badge">bar6</span></div>
+      <canvas id="bar6" width="520" height="296"></canvas>
+    </article>
+    <article class="card">
+      <div class="card-head"><h2>单灯</h2><span class="badge">pixel1</span></div>
+      <canvas id="pixel1" width="360" height="360"></canvas>
+    </article>
+  </section>
+
+  <pre id="raw">等待拉取...</pre>
+</main>
+
+<script>
+const DEFAULT_LIGHTS = {
+  idle: { intent: "idle", primary: "#22C55E", secondary: "#14B8A6", brightness: 45, speed: 25, density: 1 },
+  thinking: { intent: "thinking", primary: "#FACC15", secondary: "#38BDF8", brightness: 95, speed: 55, density: 1 },
+  busy: { intent: "busy", primary: "#3B82F6", secondary: "#8B5CF6", brightness: 120, speed: 90, density: 3 },
+  approval: { intent: "approval", primary: "#EF4444", secondary: "#F97316", brightness: 190, speed: 140, density: 4 },
+  offline: { intent: "offline", primary: "#334155", secondary: "#94A3B8", brightness: 35, speed: 20, density: 1 }
+};
+
+const els = {
+  url: document.getElementById("url"),
+  token: document.getElementById("token"),
+  save: document.getElementById("save"),
+  once: document.getElementById("once"),
+  manual: document.getElementById("manual"),
+  raw: document.getElementById("raw"),
+  state: document.getElementById("m-state"),
+  intent: document.getElementById("m-intent"),
+  event: document.getElementById("m-event"),
+  updated: document.getElementById("m-updated")
+};
+
+let remoteStatus = null;
+let currentStatus = makeStatus("offline");
+let lastFetchAt = 0;
+let lastError = "";
+
+els.url.value = localStorage.getItem("agentLightPreviewUrl") || els.url.value;
+els.token.value = localStorage.getItem("agentLightPreviewToken") || "";
+
+function makeStatus(intent) {
+  const light = { ...DEFAULT_LIGHTS[intent] };
+  return {
+    state: intent === "offline" ? "idle" : intent,
+    event: intent,
+    message: intent,
+    updatedAt: new Date().toLocaleString(),
+    light
+  };
+}
+
+function hexToRgb(hex) {
+  const clean = String(hex || "#000000").replace("#", "");
+  const n = Number.parseInt(clean.length === 3 ? clean.split("").map(c => c + c).join("") : clean, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function rgbToCss(c, alpha = 1) {
+  return `rgba(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)}, ${alpha})`;
+}
+
+function blend(a, b, t) {
+  return {
+    r: a.r + (b.r - a.r) * t,
+    g: a.g + (b.g - a.g) * t,
+    b: a.b + (b.b - a.b) * t
+  };
+}
+
+function scale(c, k) {
+  return { r: c.r * k, g: c.g * k, b: c.b * k };
+}
+
+function glow(ctx, x, y, radius, color, alpha) {
+  const grd = ctx.createRadialGradient(x, y, 0, x, y, radius);
+  grd.addColorStop(0, rgbToCss(color, alpha));
+  grd.addColorStop(.55, rgbToCss(color, alpha * .22));
+  grd.addColorStop(1, rgbToCss(color, 0));
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawLed(ctx, x, y, size, color, alpha = 1) {
+  glow(ctx, x, y, size * 2.6, color, alpha * .62);
+  ctx.fillStyle = rgbToCss(color, alpha);
+  ctx.beginPath();
+  ctx.arc(x, y, size, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.36)";
+  ctx.beginPath();
+  ctx.arc(x - size * .28, y - size * .34, size * .22, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function clear(ctx, canvas) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#050913";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function addSoftBlob(ctx, x, y, radius, color, alpha) {
+  const grd = ctx.createRadialGradient(x, y, 0, x, y, radius);
+  grd.addColorStop(0, rgbToCss(color, alpha));
+  grd.addColorStop(.42, rgbToCss(color, alpha * .42));
+  grd.addColorStop(1, rgbToCss(color, 0));
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function wledBreath(t, speed) {
+  const cycleMs = 8200 - Math.min(7800, Math.max(0, speed || 0) * 56);
+  const pauseRatio = .18;
+  const active = 1 - pauseRatio;
+  const phase = ((t * 1000) % cycleMs) / cycleMs;
+  if (phase > active) return .08;
+  const p = phase / active;
+  return .08 + Math.sin(p * Math.PI) * .92;
+}
+
+function drawAmbientScreen(canvas) {
+  const ctx = canvas.getContext("2d");
+  const light = lightFromStatus();
+  const t = performance.now() / 1000;
+  const w = canvas.width;
+  const h = canvas.height;
+  const primary = hexToRgb(light.primary);
+  const secondary = hexToRgb(light.secondary);
+  const warm = hexToRgb("#FEF08A");
+  const mint = hexToRgb("#86EFAC");
+  const sky = hexToRgb("#93C5FD");
+  const rose = hexToRgb("#F9A8D4");
+  const breath = wledBreath(t, light.speed);
+  const power = intensity(light) * (.58 + breath * .42);
+  const drift = .55 + Math.sin(t * .16) * .45;
+
+  ctx.clearRect(0, 0, w, h);
+  const base = ctx.createLinearGradient(0, 0, 0, h);
+  base.addColorStop(0, "#f8fbff");
+  base.addColorStop(.52, "#ffffff");
+  base.addColorStop(1, "#fcfcfd");
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "multiply";
+  addSoftBlob(ctx, w * (.2 + Math.sin(t * .17) * .08), h * (.03 + drift * .03), w * .58, primary, .24 + power * .26);
+  addSoftBlob(ctx, w * (.78 + Math.cos(t * .13) * .07), h * (.08 + Math.sin(t * .11) * .03), w * .58, secondary, .2 + power * .24);
+  addSoftBlob(ctx, w * (.47 + Math.sin(t * .09) * .08), h * (.27 + Math.cos(t * .12) * .04), w * .7, blend(primary, secondary, .5), .1 + power * .16);
+  addSoftBlob(ctx, w * (.12 + Math.cos(t * .1) * .05), h * .46, w * .5, mint, light.intent === "idle" ? .24 : .13);
+  addSoftBlob(ctx, w * (.5 + Math.sin(t * .08) * .05), h * .32, w * .48, warm, light.intent === "thinking" ? .32 : .16);
+  addSoftBlob(ctx, w * (.72 + Math.sin(t * .12) * .05), h * .4, w * .44, light.intent === "approval" ? rose : sky, light.intent === "approval" ? .28 : .17);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  const bandY = h * (.63 + Math.sin(t * .22) * .035);
+  const band = ctx.createLinearGradient(0, bandY - h * .22, w, bandY + h * .18);
+  band.addColorStop(0, rgbToCss(primary, 0));
+  band.addColorStop(.2, rgbToCss(primary, .2 + power * .18));
+  band.addColorStop(.48, rgbToCss(warm, .2 + power * .24));
+  band.addColorStop(.8, rgbToCss(secondary, .2 + power * .18));
+  band.addColorStop(1, rgbToCss(secondary, 0));
+  ctx.fillStyle = band;
+  ctx.beginPath();
+  ctx.moveTo(0, bandY + Math.sin(t * .9) * 16);
+  ctx.bezierCurveTo(w * .22, bandY - h * .19, w * .48, bandY + h * .16, w, bandY - h * .08);
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalCompositeOperation = "multiply";
+  const sheen = ctx.createLinearGradient(0, 0, 0, h);
+  sheen.addColorStop(0, `rgba(255,255,255,${.08 + breath * .18})`);
+  sheen.addColorStop(.45, "rgba(255,255,255,.62)");
+  sheen.addColorStop(1, "rgba(255,255,255,.96)");
+  ctx.fillStyle = sheen;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+
+  const dotsTop = h * .44;
+  const spacing = 13;
+  for (let y = dotsTop; y < h * .98; y += spacing) {
+    for (let x = -20; x < w + 20; x += spacing) {
+      const nx = x / w;
+      const ny = (y - dotsTop) / (h * .54);
+      const curve = .34 + Math.sin(nx * 7 + t * .34) * .08 + Math.cos(nx * 3 - t * .24) * .05;
+      const ridge = Math.exp(-Math.pow(ny - curve, 2) * 22);
+      const wave = Math.sin(nx * 26 + ny * 15 - t * (1.6 + (light.speed || 50) / 70));
+      const fade = Math.max(0, 1 - ny * .82);
+      const alpha = Math.max(0, (.025 + ridge * .34 + wave * .035) * fade * power);
+      const size = .8 + ridge * 2.4 + Math.max(0, wave) * .55;
+      ctx.fillStyle = rgbToCss(blend(blend(primary, warm, nx), secondary, ny * .35), alpha);
+      ctx.beginPath();
+      ctx.arc(x + Math.sin(y * .015 + t * .65) * 4, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function lightFromStatus() {
+  const manual = els.manual.value;
+  if (manual) return DEFAULT_LIGHTS[manual];
+  const light = currentStatus.light || DEFAULT_LIGHTS[currentStatus.state] || DEFAULT_LIGHTS.offline;
+  const intent = light.intent || currentStatus.state || "offline";
+  return { ...DEFAULT_LIGHTS[intent] || DEFAULT_LIGHTS.offline, ...light, intent };
+}
+
+function intensity(light) {
+  return Math.max(.18, Math.min(1, (light.brightness || 80) / 190));
+}
+
+function matrixColor(light, x, y, w, h, t) {
+  const intent = light.intent;
+  const primary = hexToRgb(light.primary);
+  const secondary = hexToRgb(light.secondary);
+  const accent = hexToRgb("#E0F2FE");
+  const cx = (w - 1) / 2;
+  const cy = (h - 1) / 2;
+  const dx = x - cx;
+  const dy = y - cy;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const pulse = (Math.sin(t * 2.2) + 1) / 2;
+
+  if (intent === "idle") {
+    const wave = (Math.sin(x * 1.35 + y * .9 + t * .75) + Math.sin(y * 1.7 - t * .55)) * .25 + .5;
+    return scale(blend(secondary, primary, wave), .18 + .55 * wave);
+  }
+  if (intent === "thinking") {
+    const core = Math.max(0, 1 - dist / (w * .52));
+    const drift = (Math.sin(x * 1.8 + t * 1.4) + Math.cos(y * 1.6 - t * 1.2)) * .25 + .5;
+    const sparkle = Math.sin((x * 17 + y * 31) + t * 6) > .94 ? 1 : 0;
+    return scale(blend(primary, secondary, drift), .15 + core * (.85 + pulse * .25) + sparkle * .65);
+  }
+  if (intent === "busy") {
+    const stream = ((x + Math.floor(t * 5 + y * 1.7)) % Math.max(2, w)) / Math.max(1, w - 1);
+    const packet = stream < .18 ? 1 : 0;
+    return scale(blend(primary, secondary, stream), .18 + packet * .95 + (1 - stream) * .25);
+  }
+  if (intent === "approval") {
+    const edge = x === 0 || y === 0 || x === w - 1 || y === h - 1;
+    const flash = Math.sin(t * 12) > 0;
+    const center = dist < 1.15;
+    if (center && flash) return accent;
+    return scale(edge ? blend(primary, secondary, pulse) : primary, edge ? .95 : .12);
+  }
+  if (intent === "offline") {
+    const active = x === 0 && y === 0;
+    return scale(secondary, active ? .25 + .45 * pulse : .04);
+  }
+  return primary;
+}
+
+function drawMatrix(canvas, w, h) {
+  const ctx = canvas.getContext("2d");
+  const light = lightFromStatus();
+  const t = performance.now() / 1000;
+  const margin = canvas.width * .11;
+  const gap = canvas.width * .018;
+  const cell = (canvas.width - margin * 2 - gap * (w - 1)) / w;
+  const yOffset = (canvas.height - (cell * h + gap * (h - 1))) / 2;
+  clear(ctx, canvas);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const c = matrixColor(light, x, y, w, h, t);
+      drawLed(ctx, margin + x * (cell + gap) + cell / 2, yOffset + y * (cell + gap) + cell / 2, cell * .36, c, intensity(light));
+    }
+  }
+}
+
+function drawRing(canvas, count) {
+  const ctx = canvas.getContext("2d");
+  const light = lightFromStatus();
+  const t = performance.now() / 1000;
+  const primary = hexToRgb(light.primary);
+  const secondary = hexToRgb(light.secondary);
+  clear(ctx, canvas);
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  const radius = canvas.width * .33;
+  const speed = .7 + (light.speed || 50) / 100;
+  for (let i = 0; i < count; i++) {
+    const a = -Math.PI / 2 + i / count * Math.PI * 2;
+    let k = .2;
+    if (light.intent === "idle") k = .28 + .45 * ((Math.sin(i * .9 + t * .8) + 1) / 2);
+    if (light.intent === "thinking") k = .18 + .9 * Math.max(0, Math.cos(i / count * Math.PI * 2 - t * speed));
+    if (light.intent === "busy") k = .15 + .9 * Math.max(0, Math.cos(i / count * Math.PI * 6 - t * speed * 2));
+    if (light.intent === "approval") k = Math.sin(t * 12) > 0 ? .95 : .18;
+    if (light.intent === "offline") k = i === Math.floor(t * 1.2) % count ? .5 : .06;
+    const c = blend(primary, secondary, (Math.sin(i + t) + 1) / 2);
+    drawLed(ctx, cx + Math.cos(a) * radius, cy + Math.sin(a) * radius, canvas.width * .035, scale(c, k), intensity(light));
+  }
+}
+
+function drawBar(canvas, count) {
+  const ctx = canvas.getContext("2d");
+  const light = lightFromStatus();
+  const t = performance.now() / 1000;
+  const primary = hexToRgb(light.primary);
+  const secondary = hexToRgb(light.secondary);
+  clear(ctx, canvas);
+  const margin = canvas.width * .13;
+  const gap = canvas.width * .035;
+  const cell = (canvas.width - margin * 2 - gap * (count - 1)) / count;
+  const y = canvas.height / 2;
+  for (let i = 0; i < count; i++) {
+    let k = .2;
+    if (light.intent === "idle") k = i >= 2 && i <= 3 ? .45 : .16;
+    if (light.intent === "thinking") k = .25 + .6 * ((Math.sin(i * 1.2 + t * 2.2) + 1) / 2);
+    if (light.intent === "busy") k = .2 + .85 * Math.max(0, Math.cos(i - t * 4));
+    if (light.intent === "approval") k = Math.sin(t * 13) > 0 ? .95 : .12;
+    if (light.intent === "offline") k = i === 0 ? .35 + .35 * ((Math.sin(t * 2) + 1) / 2) : .04;
+    drawLed(ctx, margin + i * (cell + gap) + cell / 2, y, cell * .34, scale(blend(primary, secondary, i / Math.max(1, count - 1)), k), intensity(light));
+  }
+}
+
+function drawPixel(canvas) {
+  const ctx = canvas.getContext("2d");
+  const light = lightFromStatus();
+  const t = performance.now() / 1000;
+  const primary = hexToRgb(light.primary);
+  const secondary = hexToRgb(light.secondary);
+  const pulse = (Math.sin(t * (light.intent === "approval" ? 12 : 2)) + 1) / 2;
+  const c = blend(primary, secondary, pulse);
+  const k = light.intent === "approval" ? (.2 + .9 * pulse) : (.35 + .45 * pulse);
+  clear(ctx, canvas);
+  drawLed(ctx, canvas.width / 2, canvas.height / 2, canvas.width * .12, scale(c, k), intensity(light));
+}
+
+function render() {
+  drawAmbientScreen(document.getElementById("vibeScreen"));
+  drawMatrix(document.getElementById("matrix8"), 8, 8);
+  drawMatrix(document.getElementById("matrix4"), 4, 4);
+  drawMatrix(document.getElementById("matrix2"), 2, 2);
+  drawRing(document.getElementById("ring12"), 12);
+  drawBar(document.getElementById("bar6"), 6);
+  drawPixel(document.getElementById("pixel1"));
+  requestAnimationFrame(render);
+}
+
+async function fetchStatus() {
+  const url = els.url.value.trim();
+  const token = els.token.value.trim();
+  localStorage.setItem("agentLightPreviewUrl", url);
+  localStorage.setItem("agentLightPreviewToken", token);
+  if (!url || !token) {
+    lastError = "请填写 token 后开始";
+    updateMeta();
+    return;
+  }
+  try {
+    const isFilePreview = window.location.protocol === "file:";
+    const response = isFilePreview
+      ? await fetch(url, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store"
+        })
+      : await fetch("/proxy/status", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ url, token }),
+          cache: "no-store"
+        });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    remoteStatus = await response.json();
+    currentStatus = normalizeStatus(remoteStatus);
+    lastFetchAt = Date.now();
+    lastError = "";
+  } catch (error) {
+    lastError = String(error.message || error);
+    if (!remoteStatus) currentStatus = makeStatus("offline");
+  }
+  updateMeta();
+}
+
+function normalizeStatus(status) {
+  const intent = status?.light?.intent || status?.state || "offline";
+  const base = DEFAULT_LIGHTS[intent] || DEFAULT_LIGHTS.offline;
+  return { ...status, light: { ...base, ...(status.light || {}), intent } };
+}
+
+function updateMeta() {
+  const status = els.manual.value ? makeStatus(els.manual.value) : currentStatus;
+  const light = status.light || {};
+  els.state.textContent = status.state || "-";
+  els.intent.textContent = light.intent || "-";
+  els.event.textContent = status.event || "-";
+  els.updated.textContent = status.updatedAt || (lastFetchAt ? new Date(lastFetchAt).toLocaleTimeString() : "-");
+  els.raw.textContent = lastError
+    ? `拉取失败：${lastError}\n\n${remoteStatus ? JSON.stringify(remoteStatus, null, 2) : ""}`
+    : JSON.stringify(remoteStatus || status, null, 2);
+}
+
+els.save.onclick = () => fetchStatus();
+els.once.onclick = () => fetchStatus();
+els.manual.onchange = () => updateMeta();
+
+setInterval(fetchStatus, 1000);
+fetchStatus();
+render();
+</script>
+</body>
+</html>

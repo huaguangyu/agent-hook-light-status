@@ -2,8 +2,8 @@ const fs = require("node:fs");
 
 // ============ 改这里（直接改下面四个值；若设了同名环境变量，环境变量优先）============
 const DEVICE_ID = "desk-light-01";               // 这盏灯/这个用户的唯一 id；同一用户的所有工具填同一个，不同用户填不同的
-const SERVER_URL = "http://127.0.0.1:4318";       // server 地址
-const COLLECTOR_TOKEN = "replace-with-collector-token"; // 上报 token，要和 server 的 Collector token 一致
+const SERVER_URL = "http://light.woogua.com";       // server 地址
+const COLLECTOR_TOKEN = "d00cb656a261c4dc14040d0154475aca5315e4aa58cbb217"; // 上报 token，要和 server 的 Collector token 一致
 const POST_TIMEOUT_MS = 800;                     // POST 超时(ms)，server 长期不开可调小（如 200）
 // ==============================================================================
 

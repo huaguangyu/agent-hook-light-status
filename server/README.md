@@ -207,6 +207,7 @@ dist/agent-light-server-linux-amd64
 
 ```text
 /api/devices/workspace/status?displayId=desk-ring-12
+/api/devices/workspace/status?displayId=desk-matrix-8x8
 /api/devices/workspace/status?displayId=desk-matrix-4x4
 /api/devices/workspace/status?displayId=mini-2x2
 /api/devices/workspace/status?displayId=single-dot
@@ -221,6 +222,7 @@ dist/agent-light-server-linux-amd64
 | `pixel1` | 单个灯 | 1 | 呼吸、快闪、颜色渐变 |
 | `matrix2x2` | 2x2 方形 | 4 | 四象限脉冲、对角呼吸 |
 | `matrix4x4` | 4x4 方形 | 16 | 中心扩散、数据扫描、边框能量场 |
+| `matrix8x8` | 8x8 方形 | 64 | 极光噪声、数据雨、粒子漂移、中心 bloom |
 | `ring12` | 12 环形 | 12 | 旋转能量环、粒子追逐、完成扫圈 |
 | `bar6` | 6 位条形 | 6 | 数据流、进度扫描、流星拖尾 |
 
@@ -280,3 +282,5 @@ collector 上报：Authorization: Bearer <AGENT_LIGHT_COLLECTOR_TOKEN>
 | `approval` | `alert_gate`，红橙能量门快脉冲 |
 | `done` | `holo_bloom`，绿色/青色扩散 |
 | `offline` | `cold_sleep`，暗蓝灰单点慢闪 |
+
+8x8 方阵是推荐主显示形态，固件可以把 `thinking` 做成暖金核心 + 青蓝粒子漂移，把 `busy` 做成蓝紫数据雨 + 白色数据包拖尾，把 `approval` 做成红橙边框能量门 + 中心白闪。

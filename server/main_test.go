@@ -174,6 +174,25 @@ func TestStatusExplicitLayout(t *testing.T) {
 	}
 }
 
+func TestStatusMatrix8x8DisplayProfile(t *testing.T) {
+	s := newTestServer()
+	req := httptest.NewRequest(http.MethodGet, "/api/devices/workspace/status?displayId=desk-matrix-8x8", nil)
+	req.Header.Set("Authorization", "Bearer "+testDeviceToken)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var status StatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Display == nil || status.Display.Layout != "matrix8x8" || status.Display.Pixels != 64 || status.Display.Width != 8 || status.Display.Height != 8 {
+		t.Fatalf("unexpected display profile: %+v", status.Display)
+	}
+}
+
 func TestEventsAreScopedPerDevice(t *testing.T) {
 	s := newTestServer()
 	s.cfg.MaxRecent = 3
