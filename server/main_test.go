@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -65,14 +66,20 @@ func TestPostStatusAndEvents(t *testing.T) {
 	if err := json.Unmarshal(statusRec.Body.Bytes(), &status); err != nil {
 		t.Fatal(err)
 	}
-	if status.State != "approval" || status.Color != "red" || status.Effect != "fast_blink" {
+	if status.State != "approval" || status.Color != "red" {
 		t.Fatalf("unexpected status: %+v", status)
-	}
-	if status.Light.Intent != "approval" || status.Light.Primary != "#EF4444" || status.Light.Priority != 90 {
-		t.Fatalf("unexpected light intent: %+v", status.Light)
 	}
 	if len(status.Details) == 0 {
 		t.Fatalf("details should be included")
+	}
+	var rawStatus map[string]json.RawMessage
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &rawStatus); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"light", "effect", "display"} {
+		if _, ok := rawStatus[key]; ok {
+			t.Fatalf("status response should not include %q: %s", key, statusRec.Body.String())
+		}
 	}
 
 	eventsReq := httptest.NewRequest(http.MethodGet, "/api/devices/desk-light-01/events?limit=20&details=1", nil)
@@ -118,78 +125,8 @@ func TestIdleTTL(t *testing.T) {
 	if status.State != "idle" || status.Message != "空闲（超时未更新）" {
 		t.Fatalf("unexpected expired status: %+v", status)
 	}
-	if status.Light.Intent != "idle" {
-		t.Fatalf("expired status should include idle light intent: %+v", status.Light)
-	}
-}
-
-func TestStatusDisplayProfile(t *testing.T) {
-	s := newTestServer()
-	body := []byte(`{"source":"manual","state":"busy","event":"ManualTest","message":"忙碌"}`)
-
-	post := httptest.NewRequest(http.MethodPost, "/api/devices/workspace/events", bytes.NewReader(body))
-	post.Header.Set("Authorization", "Bearer "+testCollectorToken)
-	rec := httptest.NewRecorder()
-	s.ServeHTTP(rec, post)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("post status = %d, body = %s", rec.Code, rec.Body.String())
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/devices/workspace/status?displayId=desk-ring-12", nil)
-	req.Header.Set("Authorization", "Bearer "+testDeviceToken)
-	statusRec := httptest.NewRecorder()
-	s.ServeHTTP(statusRec, req)
-	if statusRec.Code != http.StatusOK {
-		t.Fatalf("status status = %d, body = %s", statusRec.Code, statusRec.Body.String())
-	}
-
-	var status StatusResponse
-	if err := json.Unmarshal(statusRec.Body.Bytes(), &status); err != nil {
-		t.Fatal(err)
-	}
-	if status.Light.Intent != "busy" || status.Light.Density != 3 {
-		t.Fatalf("unexpected busy light intent: %+v", status.Light)
-	}
-	if status.Display == nil || status.Display.ID != "desk-ring-12" || status.Display.Layout != "ring12" || status.Display.Pixels != 12 {
-		t.Fatalf("unexpected display profile: %+v", status.Display)
-	}
-}
-
-func TestStatusExplicitLayout(t *testing.T) {
-	s := newTestServer()
-	req := httptest.NewRequest(http.MethodGet, "/api/devices/workspace/status?displayId=desk-main&layout=matrix4x4", nil)
-	req.Header.Set("Authorization", "Bearer "+testDeviceToken)
-	rec := httptest.NewRecorder()
-	s.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status status = %d, body = %s", rec.Code, rec.Body.String())
-	}
-
-	var status StatusResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
-		t.Fatal(err)
-	}
-	if status.Display == nil || status.Display.Layout != "matrix4x4" || status.Display.Pixels != 16 || status.Display.Width != 4 || status.Display.Height != 4 {
-		t.Fatalf("unexpected display profile: %+v", status.Display)
-	}
-}
-
-func TestStatusMatrix8x8DisplayProfile(t *testing.T) {
-	s := newTestServer()
-	req := httptest.NewRequest(http.MethodGet, "/api/devices/workspace/status?displayId=desk-matrix-8x8", nil)
-	req.Header.Set("Authorization", "Bearer "+testDeviceToken)
-	rec := httptest.NewRecorder()
-	s.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status status = %d, body = %s", rec.Code, rec.Body.String())
-	}
-
-	var status StatusResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
-		t.Fatal(err)
-	}
-	if status.Display == nil || status.Display.Layout != "matrix8x8" || status.Display.Pixels != 64 || status.Display.Width != 8 || status.Display.Height != 8 {
-		t.Fatalf("unexpected display profile: %+v", status.Display)
+	if status.Color != "green" {
+		t.Fatalf("expired status should include idle color: %+v", status)
 	}
 }
 
@@ -249,7 +186,47 @@ func TestEventsAreScopedPerDevice(t *testing.T) {
 	}
 }
 
+func TestMqttTopicForDeviceTemplate(t *testing.T) {
+	p := NewMqttPublisher(MqttConfig{})
+	p.cfg.Topic = "wled/%s"
+
+	if got := p.topicFor("alice-light"); got != "wled/alice-light/api" {
+		t.Fatalf("topicFor alice = %q", got)
+	}
+	if got := p.topicFor("team/a + #1"); got != "wled/team-a--1/api" {
+		t.Fatalf("topicFor sanitized device = %q", got)
+	}
+}
+
+func TestMqttTopicTemplateDoesNotDoubleAPISuffix(t *testing.T) {
+	p := NewMqttPublisher(MqttConfig{})
+	p.cfg.Topic = "wled/%s/api"
+
+	if got := p.topicFor("alice-light"); got != "wled/alice-light/api" {
+		t.Fatalf("topicFor with api suffix = %q", got)
+	}
+}
+
+func TestMqttTopicTemplateOnlyReplacesDevicePlaceholder(t *testing.T) {
+	p := NewMqttPublisher(MqttConfig{})
+	p.cfg.Topic = "wled/%s/%done"
+
+	if got := p.topicFor("alice-light"); got != "wled/alice-light/%done/api" {
+		t.Fatalf("topicFor percent literal = %q", got)
+	}
+}
+
+func TestMqttTopicForFixedTopic(t *testing.T) {
+	p := NewMqttPublisher(MqttConfig{})
+	p.cfg.Topic = "wled/desk-ring"
+
+	if got := p.topicFor("alice-light"); got != "wled/desk-ring/api" {
+		t.Fatalf("fixed topic should remain compatible, got %q", got)
+	}
+}
+
 func TestLoadConfigRandomTokens(t *testing.T) {
+	withTempAppBase(t)
 	oldFlags := cliFlags
 	cliFlags = map[string]string{}
 	defer func() { cliFlags = oldFlags }()
@@ -266,13 +243,33 @@ func TestLoadConfigRandomTokens(t *testing.T) {
 	if cfg.CollectorToken == "dev-collector-token" || cfg.DeviceToken == "dev-device-token" {
 		t.Fatalf("tokens should not use old fixed defaults: %+v", cfg)
 	}
+
+	var env EnvFile
+	data, err := os.ReadFile(filepath.Join(appBaseDir(), envFileName))
+	if err != nil {
+		t.Fatalf("env.json should be created: %v", err)
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.CollectorToken != cfg.CollectorToken || env.DeviceToken != cfg.DeviceToken {
+		t.Fatalf("generated tokens should be persisted, env=%+v cfg=%+v", env, cfg)
+	}
+	if env.MqttTopic != defaultMqttTopic {
+		t.Fatalf("env should include mqtt topic, got %+v", env)
+	}
 }
 
 func TestLoadConfigSpecifiedTokens(t *testing.T) {
+	withTempAppBase(t)
 	oldFlags := cliFlags
 	cliFlags = map[string]string{
 		"collector-token": "collector-from-cli",
 		"device-token":    "device-from-cli",
+		"port":            "4321",
+		"mqtt-broker":     "tcp://mqtt.example:1883",
+		"mqtt-user":       "mqtt-user",
+		"mqtt-pass":       "mqtt-pass",
 	}
 	defer func() { cliFlags = oldFlags }()
 	_ = os.Unsetenv("AGENT_LIGHT_COLLECTOR_TOKEN")
@@ -285,4 +282,40 @@ func TestLoadConfigSpecifiedTokens(t *testing.T) {
 	if cfg.CollectorTokenGenerated || cfg.DeviceTokenGenerated {
 		t.Fatalf("specified tokens should not be marked generated: %+v", cfg)
 	}
+	if cfg.Port != 4321 || cfg.Mqtt.Broker != "tcp://mqtt.example:1883" {
+		t.Fatalf("cli config not used: %+v", cfg)
+	}
+
+	var env EnvFile
+	data, err := os.ReadFile(filepath.Join(appBaseDir(), envFileName))
+	if err != nil {
+		t.Fatalf("env.json should be created: %v", err)
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.CollectorToken != "collector-from-cli" || env.DeviceToken != "device-from-cli" || env.Port != 4321 {
+		t.Fatalf("cli values should be persisted: %+v", env)
+	}
+	if env.MqttBroker != "tcp://mqtt.example:1883" || env.MqttUser != "mqtt-user" || env.MqttPass != "mqtt-pass" {
+		t.Fatalf("mqtt cli values should be persisted: %+v", env)
+	}
+}
+
+func withTempAppBase(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(oldWd)
+	})
 }

@@ -5,7 +5,7 @@ const path = require("node:path");
 
 const PORT = Number(process.env.PORT || 8765);
 const HOST = process.env.HOST || "127.0.0.1";
-const DEFAULT_STATUS_URL = "http://light.woogua.com/api/devices/desk-light-01/status";
+const DEFAULT_STATUS_URL = "http://127.0.0.1:4318/api/devices/desk-light-01/status";
 const HTML_FILE = path.join(__dirname, "light-preview.html");
 
 function send(res, statusCode, contentType, body) {

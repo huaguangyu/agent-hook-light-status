@@ -5,115 +5,198 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Agent Light 灯效模拟器</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;550;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
     :root {
       color-scheme: dark;
-      --bg: #070b14;
-      --panel: #101827;
-      --panel-2: #0d1422;
-      --line: #243044;
-      --text: #e6eefc;
-      --muted: #91a2bd;
+      --bg: #070a13;
+      --panel: rgba(15, 23, 42, 0.65);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --panel-glow: rgba(56, 189, 248, 0.03);
+      --line: rgba(255, 255, 255, 0.08);
+      --text: #f8fafc;
+      --muted: #94a3b8;
       --accent: #38bdf8;
-      --ok: #22c55e;
-      --warn: #facc15;
+      --accent-gradient: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+      --accent-glow: rgba(56, 189, 248, 0.25);
+      --ok: #10b981;
+      --warn: #f59e0b;
       --hot: #ef4444;
+      --active-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
     }
 
     * { box-sizing: border-box; }
+    
     body {
       margin: 0;
       background:
-        radial-gradient(circle at 28% 16%, rgba(56, 189, 248, .12), transparent 34%),
-        radial-gradient(circle at 80% 20%, rgba(167, 139, 250, .10), transparent 30%),
+        radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.12), transparent 45%),
+        radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.08), transparent 45%),
+        linear-gradient(rgba(255, 255, 255, 0.005) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.005) 1px, transparent 1px),
         var(--bg);
+      background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }
 
     main {
-      width: min(1180px, calc(100vw - 32px));
+      width: min(1200px, calc(100vw - 32px));
       margin: 0 auto;
-      padding: 24px 0 34px;
+      padding: 40px 0 60px;
     }
 
     h1 {
       margin: 0 0 8px;
-      font-size: 26px;
-      font-weight: 740;
-      letter-spacing: 0;
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 30%, #cbd5e1 70%, #38bdf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
 
     .sub {
-      margin: 0 0 18px;
+      margin: 0 0 28px;
       color: var(--muted);
-      line-height: 1.5;
-      font-size: 14px;
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    .sub code {
+      background: rgba(255, 255, 255, 0.06);
+      padding: 3px 6px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9em;
+      color: var(--accent);
+      border: 1px solid rgba(255, 255, 255, 0.03);
     }
 
     .toolbar {
       display: grid;
-      grid-template-columns: 1.4fr .9fr auto auto auto;
-      gap: 10px;
+      grid-template-columns: 1.4fr 1fr auto auto auto;
+      gap: 14px;
       align-items: end;
-      padding: 14px;
-      border: 1px solid var(--line);
-      background: rgba(16, 24, 39, .88);
-      border-radius: 8px;
+      padding: 20px;
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .toolbar:hover {
+      border-color: rgba(56, 189, 248, 0.2);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px var(--panel-glow);
     }
 
     label {
       display: block;
-      color: #cbd7eb;
-      font-size: 12px;
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
       margin: 0 0 6px;
     }
 
     input, select, button {
       width: 100%;
-      min-height: 38px;
-      border: 1px solid var(--line);
-      border-radius: 7px;
-      background: #0b1220;
+      min-height: 42px;
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      background: rgba(7, 10, 19, 0.85);
       color: var(--text);
       font: inherit;
       font-size: 14px;
-      padding: 8px 10px;
+      padding: 8px 12px;
+      outline: none;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    input:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: var(--active-shadow);
+      background: rgba(7, 10, 19, 0.98);
     }
 
     button {
-      background: #1f2a44;
+      background: rgba(30, 41, 59, 0.7);
       cursor: pointer;
-      font-weight: 650;
+      font-weight: 600;
       white-space: nowrap;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    button:hover {
+      background: rgba(30, 41, 59, 0.95);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(1px);
     }
 
     button.primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #06111f;
+      background: var(--accent-gradient);
+      border: none;
+      color: #040810;
+      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.2);
+    }
+
+    button.primary:hover {
+      background: linear-gradient(135deg, #7dd3fc 0%, #a5b4fc 100%);
+      box-shadow: 0 4px 20px rgba(56, 189, 248, 0.4);
     }
 
     .status {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-      margin: 12px 0 18px;
+      gap: 14px;
+      margin: 16px 0 24px;
     }
 
     .metric {
-      min-height: 64px;
-      padding: 11px 12px;
-      border: 1px solid var(--line);
-      background: rgba(13, 20, 34, .9);
-      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+      min-height: 72px;
+      padding: 14px 18px;
+      background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     }
+
+    .metric::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--panel-border);
+    }
+
+    .metric.active-state::before { background: var(--accent); }
+    .metric.active-intent::before { background: var(--ok); }
+    .metric.active-event::before { background: var(--warn); }
 
     .metric b {
       display: block;
-      margin-bottom: 5px;
-      font-size: 12px;
+      margin-bottom: 6px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
       color: var(--muted);
-      font-weight: 560;
+      font-weight: 600;
     }
 
     .metric span {
@@ -121,13 +204,20 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: 15px;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
     }
+
+    #m-state { color: var(--accent); }
+    #m-intent { color: var(--ok); }
+    #m-event { color: var(--warn); }
+    #m-updated { color: var(--muted); }
 
     .grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
+      gap: 20px;
     }
 
     .ambient-card {
@@ -137,14 +227,27 @@
     .ambient-stage {
       display: grid;
       place-items: center;
+      padding: 10px 0;
     }
 
     .card {
-      border: 1px solid var(--line);
-      background: rgba(16, 24, 39, .86);
-      border-radius: 8px;
-      padding: 12px;
-      min-width: 0;
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35);
+      transform: translateY(-2px);
     }
 
     .card-head {
@@ -152,52 +255,77 @@
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      margin-bottom: 8px;
+      margin-bottom: 16px;
     }
 
     .card h2 {
       margin: 0;
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 700;
+      color: #f8fafc;
     }
 
     .badge {
-      color: var(--muted);
-      font-size: 12px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 3px 8px;
+      color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      background: rgba(56, 189, 248, 0.05);
+      border-radius: 6px;
+      padding: 2px 8px;
     }
 
     canvas {
       display: block;
       width: 100%;
       aspect-ratio: 1;
-      border-radius: 6px;
-      background: #050913;
+      border-radius: 10px;
+      background: #020408;
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      box-shadow: inset 0 4px 20px rgba(0, 0, 0, 0.6);
     }
 
     .wide canvas { aspect-ratio: 1.75; }
 
     .ambient-card canvas {
-      width: min(860px, 100%);
+      width: 100%;
+      max-width: 960px;
       aspect-ratio: 16 / 9;
-      border-radius: 14px;
-      background: #fbfcff;
-      box-shadow: 0 18px 52px rgba(0, 0, 0, .3);
+      border-radius: 16px;
+      background: #020408;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.55), inset 0 0 80px rgba(56, 189, 248, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     pre {
-      max-height: 220px;
+      max-height: 250px;
       overflow: auto;
-      margin: 14px 0 0;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #060a12;
-      color: #b8c7dd;
-      font-size: 12px;
-      line-height: 1.45;
+      margin: 24px 0 0;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      background: rgba(5, 8, 16, 0.85);
+      color: #10b981;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+    }
+
+    pre::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    pre::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    pre::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.2);
+      border-radius: 4px;
+    }
+    pre::-webkit-scrollbar-thumb:hover {
+      background: rgba(56, 189, 248, 0.4);
     }
 
     @media (max-width: 900px) {
@@ -210,12 +338,12 @@
 <body>
 <main>
   <h1>Agent Light 灯效模拟器</h1>
-  <p class="sub">每 1 秒读取一次远程状态，并把同一个 <code>light.intent</code> 渲染到 8x8、12 环、4x4、2x2、6 条、单灯几种灯板上。</p>
+  <p class="sub">每 1 秒读取一次远程状态，并把同一个 <code>state</code> 渲染到 8x8、12 环、4x4、2x2、6 条、单灯几种灯板上。</p>
 
   <section class="toolbar">
     <div>
       <label for="url">Status URL</label>
-      <input id="url" value="http://light.woogua.com/api/devices/desk-light-01/status">
+      <input id="url" value="http://127.0.0.1:4318/api/devices/desk-light-01/status">
     </div>
     <div>
       <label for="token">Device token</label>
@@ -231,15 +359,16 @@
         <option value="thinking">thinking</option>
         <option value="busy">busy</option>
         <option value="approval">approval</option>
+        <option value="done">done</option>
         <option value="offline">offline</option>
       </select>
     </div>
   </section>
 
   <section class="status">
-    <div class="metric"><b>state</b><span id="m-state">-</span></div>
-    <div class="metric"><b>intent</b><span id="m-intent">-</span></div>
-    <div class="metric"><b>event</b><span id="m-event">-</span></div>
+    <div class="metric active-state"><b>state</b><span id="m-state">-</span></div>
+    <div class="metric active-intent"><b>intent</b><span id="m-intent">-</span></div>
+    <div class="metric active-event"><b>event</b><span id="m-event">-</span></div>
     <div class="metric"><b>updated</b><span id="m-updated">-</span></div>
   </section>
 
@@ -285,6 +414,7 @@ const DEFAULT_LIGHTS = {
   thinking: { intent: "thinking", primary: "#FACC15", secondary: "#38BDF8", brightness: 95, speed: 55, density: 1 },
   busy: { intent: "busy", primary: "#3B82F6", secondary: "#8B5CF6", brightness: 120, speed: 90, density: 3 },
   approval: { intent: "approval", primary: "#EF4444", secondary: "#F97316", brightness: 190, speed: 140, density: 4 },
+  done: { intent: "done", primary: "#10B981", secondary: "#06B6D4", brightness: 150, speed: 80, density: 2 },
   offline: { intent: "offline", primary: "#334155", secondary: "#94A3B8", brightness: 35, speed: 20, density: 1 }
 };
 
@@ -306,6 +436,19 @@ let currentStatus = makeStatus("offline");
 let lastFetchAt = 0;
 let lastError = "";
 
+// Initialize background particles for ambient light field (avoiding moiré 6-pointed star patterns)
+const ambientParticles = [];
+for (let i = 0; i < 180; i++) {
+  ambientParticles.push({
+    x: Math.random(), // normalized X
+    y: 0.1 + Math.random() * 0.85, // normalized Y
+    size: 0.8 + Math.random() * 2.0, // base size
+    speed: 0.15 + Math.random() * 0.35, // float speed
+    alpha: 0.15 + Math.random() * 0.45, // base opacity
+    phase: Math.random() * Math.PI * 2 // random start phase
+  });
+}
+
 els.url.value = localStorage.getItem("agentLightPreviewUrl") || els.url.value;
 els.token.value = localStorage.getItem("agentLightPreviewToken") || "";
 
@@ -313,9 +456,9 @@ function makeStatus(intent) {
   const light = { ...DEFAULT_LIGHTS[intent] };
   return {
     state: intent === "offline" ? "idle" : intent,
-    event: intent,
+    event: intent.toUpperCase(),
     message: intent,
-    updatedAt: new Date().toLocaleString(),
+    updatedAt: new Date().toLocaleTimeString(),
     light
   };
 }
@@ -339,36 +482,7 @@ function blend(a, b, t) {
 }
 
 function scale(c, k) {
-  return { r: c.r * k, g: c.g * k, b: c.b * k };
-}
-
-function glow(ctx, x, y, radius, color, alpha) {
-  const grd = ctx.createRadialGradient(x, y, 0, x, y, radius);
-  grd.addColorStop(0, rgbToCss(color, alpha));
-  grd.addColorStop(.55, rgbToCss(color, alpha * .22));
-  grd.addColorStop(1, rgbToCss(color, 0));
-  ctx.fillStyle = grd;
-  ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawLed(ctx, x, y, size, color, alpha = 1) {
-  glow(ctx, x, y, size * 2.6, color, alpha * .62);
-  ctx.fillStyle = rgbToCss(color, alpha);
-  ctx.beginPath();
-  ctx.arc(x, y, size, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,.36)";
-  ctx.beginPath();
-  ctx.arc(x - size * .28, y - size * .34, size * .22, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function clear(ctx, canvas) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#050913";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return { r: Math.min(255, Math.max(0, c.r * k)), g: Math.min(255, Math.max(0, c.g * k)), b: Math.min(255, Math.max(0, c.b * k)) };
 }
 
 function addSoftBlob(ctx, x, y, radius, color, alpha) {
@@ -380,6 +494,123 @@ function addSoftBlob(ctx, x, y, radius, color, alpha) {
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function drawLiquidBlob(ctx, cx, cy, radius, color, alpha, t, morphSpeed = 1, waveCount = 5, amplitude = 0.12) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.beginPath();
+  const points = 40;
+  for (let i = 0; i <= points; i++) {
+    const angle = (i / points) * Math.PI * 2;
+    const offset = Math.sin(angle * waveCount + t * morphSpeed) * radius * amplitude * (0.85 + 0.15 * Math.cos(t * 0.4));
+    const r = radius + offset;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 1.25);
+  grd.addColorStop(0, rgbToCss(color, alpha));
+  grd.addColorStop(0.42, rgbToCss(color, alpha * 0.42));
+  grd.addColorStop(1, rgbToCss(color, 0));
+  ctx.fillStyle = grd;
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawLed(ctx, x, y, size, color, alpha = 1) {
+  // 1. Draw black hardware housing bezel
+  ctx.beginPath();
+  ctx.arc(x, y, size * 1.25, 0, Math.PI * 2);
+  ctx.fillStyle = "#0d111a";
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.stroke();
+
+  // 2. Draw light bloom/glare (using screen composite operation)
+  if (alpha > 0.01) {
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    const bloomRadius = size * 3.3;
+    const grd = ctx.createRadialGradient(x, y, 0, x, y, bloomRadius);
+    grd.addColorStop(0, rgbToCss(color, alpha * 0.7));
+    grd.addColorStop(0.3, rgbToCss(color, alpha * 0.22));
+    grd.addColorStop(0.65, rgbToCss(color, alpha * 0.07));
+    grd.addColorStop(1, rgbToCss(color, 0));
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(x, y, bloomRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 3. Draw physical diffuser lens
+  ctx.beginPath();
+  ctx.arc(x, y, size, 0, Math.PI * 2);
+  const lensGrd = ctx.createRadialGradient(x - size * 0.2, y - size * 0.2, 0, x, y, size);
+  lensGrd.addColorStop(0, rgbToCss(blend({r: 255, g: 255, b: 255}, color, 0.3), alpha));
+  lensGrd.addColorStop(0.8, rgbToCss(scale(color, 0.8), alpha));
+  lensGrd.addColorStop(1, rgbToCss(scale(color, 0.5), alpha));
+  ctx.fillStyle = lensGrd;
+  ctx.fill();
+  
+  ctx.lineWidth = 0.5;
+  ctx.strokeStyle = `rgba(255, 255, 255, ${0.15 * alpha + 0.05})`;
+  ctx.stroke();
+
+  // 4. Draw central emitter chip/die
+  if (alpha > 0.05) {
+    ctx.beginPath();
+    ctx.arc(x, y, size * 0.28, 0, Math.PI * 2);
+    ctx.fillStyle = rgbToCss(blend({r: 255, g: 255, b: 255}, color, 0.8), alpha);
+    ctx.fill();
+  }
+  
+  // Highlight reflection on the plastic lens surface
+  ctx.beginPath();
+  ctx.arc(x - size * 0.35, y - size * 0.35, size * 0.25, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.fill();
+}
+
+function clearMatrix(ctx, canvas, w, h, margin, cell, gap, yOffset) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#03060c";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw PCB panel board lines or background grid mesh
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.02)";
+  ctx.lineWidth = 1;
+  for (let y = 0; y <= h; y++) {
+    const lineY = yOffset + y * (cell + gap) - gap/2;
+    ctx.beginPath();
+    ctx.moveTo(0, lineY);
+    ctx.lineTo(canvas.width, lineY);
+    ctx.stroke();
+  }
+  for (let x = 0; x <= w; x++) {
+    const lineX = margin + x * (cell + gap) - gap/2;
+    ctx.beginPath();
+    ctx.moveTo(lineX, 0);
+    ctx.lineTo(lineX, canvas.height);
+    ctx.stroke();
+  }
+  
+  // Draw physical pocket housings for LEDs
+  ctx.fillStyle = "#070b13";
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const cx = margin + x * (cell + gap) + cell / 2;
+      const cy = yOffset + y * (cell + gap) + cell / 2;
+      ctx.fillRect(cx - cell * 0.6, cy - cell * 0.6, cell * 1.2, cell * 1.2);
+      ctx.strokeStyle = "rgba(255,255,255,0.01)";
+      ctx.strokeRect(cx - cell * 0.6, cy - cell * 0.6, cell * 1.2, cell * 1.2);
+    }
+  }
 }
 
 function wledBreath(t, speed) {
@@ -404,83 +635,133 @@ function drawAmbientScreen(canvas) {
   const mint = hexToRgb("#86EFAC");
   const sky = hexToRgb("#93C5FD");
   const rose = hexToRgb("#F9A8D4");
-  const breath = wledBreath(t, light.speed);
-  const power = intensity(light) * (.58 + breath * .42);
-  const drift = .55 + Math.sin(t * .16) * .45;
+  
+  const speedScale = 0.5 + (light.speed || 50) / 100;
+  // Dynamic non-linear liquid organic breathing cycle
+  const liquidBreath = 0.65 + 0.35 * Math.sin(t * 1.6 * speedScale + Math.sin(t * 0.8 * speedScale) * 0.7);
+  const power = intensity(light) * liquidBreath;
 
   ctx.clearRect(0, 0, w, h);
+  
+  // Cinematic dark background base gradient
   const base = ctx.createLinearGradient(0, 0, 0, h);
-  base.addColorStop(0, "#f8fbff");
-  base.addColorStop(.52, "#ffffff");
-  base.addColorStop(1, "#fcfcfd");
+  base.addColorStop(0, "#03060d");
+  base.addColorStop(0.5, "#060914");
+  base.addColorStop(1, "#020409");
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, w, h);
 
+  // Overlapping dynamic morphing liquid blobs
   ctx.save();
-  ctx.globalCompositeOperation = "multiply";
-  addSoftBlob(ctx, w * (.2 + Math.sin(t * .17) * .08), h * (.03 + drift * .03), w * .58, primary, .24 + power * .26);
-  addSoftBlob(ctx, w * (.78 + Math.cos(t * .13) * .07), h * (.08 + Math.sin(t * .11) * .03), w * .58, secondary, .2 + power * .24);
-  addSoftBlob(ctx, w * (.47 + Math.sin(t * .09) * .08), h * (.27 + Math.cos(t * .12) * .04), w * .7, blend(primary, secondary, .5), .1 + power * .16);
-  addSoftBlob(ctx, w * (.12 + Math.cos(t * .1) * .05), h * .46, w * .5, mint, light.intent === "idle" ? .24 : .13);
-  addSoftBlob(ctx, w * (.5 + Math.sin(t * .08) * .05), h * .32, w * .48, warm, light.intent === "thinking" ? .32 : .16);
-  addSoftBlob(ctx, w * (.72 + Math.sin(t * .12) * .05), h * .4, w * .44, light.intent === "approval" ? rose : sky, light.intent === "approval" ? .28 : .17);
+  
+  // Blob 1 (Primary color)
+  const b1X = w * (0.32 + Math.sin(t * 0.4 * speedScale) * 0.1);
+  const b1Y = h * (0.35 + Math.cos(t * 0.3 * speedScale) * 0.08);
+  drawLiquidBlob(ctx, b1X, b1Y, w * 0.25 * liquidBreath, primary, (0.3 + power * 0.3) * 0.85, t, 1.1 * speedScale, 5, 0.14);
+
+  // Blob 2 (Secondary color)
+  const b2X = w * (0.68 + Math.cos(t * 0.35 * speedScale) * 0.1);
+  const b2Y = h * (0.42 + Math.sin(t * 0.45 * speedScale) * 0.08);
+  drawLiquidBlob(ctx, b2X, b2Y, w * 0.23 * (1.3 - liquidBreath), secondary, (0.26 + power * 0.28) * 0.85, t + 3, -0.9 * speedScale, 4, 0.12);
+
+  // Blob 3 (Merged blend color in the center)
+  const b3X = w * (0.5 + Math.sin(t * 0.22 * speedScale) * 0.08);
+  const b3Y = h * (0.46 + Math.cos(t * 0.28 * speedScale) * 0.05);
+  drawLiquidBlob(ctx, b3X, b3Y, w * 0.26, blend(primary, secondary, 0.5), (0.15 + power * 0.18) * 0.8, t * 0.8, 0.7 * speedScale, 6, 0.15);
+
+  // Blob 4 & 5 (State accent blobs)
+  if (light.intent === "idle") {
+    const iX = w * (0.22 + Math.cos(t * 0.45 * speedScale) * 0.06);
+    const iY = h * (0.55 + Math.sin(t * 0.35 * speedScale) * 0.06);
+    drawLiquidBlob(ctx, iX, iY, w * 0.22, mint, 0.32, t, 1.3 * speedScale, 5, 0.15);
+  } else if (light.intent === "thinking") {
+    const tX = w * (0.5 + Math.sin(t * 0.9 * speedScale) * 0.04);
+    const tY = h * (0.4 + Math.cos(t * 0.7 * speedScale) * 0.04);
+    drawLiquidBlob(ctx, tX, tY, w * 0.18, warm, 0.4, t, 1.8 * speedScale, 7, 0.16);
+  } else if (light.intent === "approval") {
+    const aX = w * (0.5 + Math.sin(t * 1.4 * speedScale) * 0.05);
+    const aY = h * (0.48 + Math.cos(t * 1.1 * speedScale) * 0.05);
+    drawLiquidBlob(ctx, aX, aY, w * 0.22, rose, 0.4, t, 2.2 * speedScale, 6, 0.18);
+  } else {
+    const aX = w * (0.75 + Math.sin(t * 0.3 * speedScale) * 0.05);
+    const aY = h * (0.52 + Math.cos(t * 0.35 * speedScale) * 0.05);
+    drawLiquidBlob(ctx, aX, aY, w * 0.18, sky, 0.18, t, 0.8 * speedScale, 4, 0.1);
+  }
   ctx.restore();
 
+  // Three layers of organic liquid waves at the bottom
   ctx.save();
   ctx.globalCompositeOperation = "screen";
-  const bandY = h * (.63 + Math.sin(t * .22) * .035);
-  const band = ctx.createLinearGradient(0, bandY - h * .22, w, bandY + h * .18);
-  band.addColorStop(0, rgbToCss(primary, 0));
-  band.addColorStop(.2, rgbToCss(primary, .2 + power * .18));
-  band.addColorStop(.48, rgbToCss(warm, .2 + power * .24));
-  band.addColorStop(.8, rgbToCss(secondary, .2 + power * .18));
-  band.addColorStop(1, rgbToCss(secondary, 0));
-  ctx.fillStyle = band;
-  ctx.beginPath();
-  ctx.moveTo(0, bandY + Math.sin(t * .9) * 16);
-  ctx.bezierCurveTo(w * .22, bandY - h * .19, w * .48, bandY + h * .16, w, bandY - h * .08);
-  ctx.lineTo(w, h);
-  ctx.lineTo(0, h);
-  ctx.closePath();
-  ctx.fill();
+  const waveLayers = [
+    { color: primary, alpha: 0.09 * power, speed: 1.1 * speedScale, freq: 0.0045, amp: 26, heightOffset: 0.58 },
+    { color: blend(primary, secondary, 0.5), alpha: 0.13 * power, speed: -0.7 * speedScale, freq: 0.0075, amp: 18, heightOffset: 0.63 },
+    { color: secondary, alpha: 0.09 * power, speed: 1.6 * speedScale, freq: 0.0055, amp: 22, heightOffset: 0.67 }
+  ];
+  
+  waveLayers.forEach((wave, idx) => {
+    const grad = ctx.createLinearGradient(0, h * wave.heightOffset - wave.amp, 0, h);
+    grad.addColorStop(0, rgbToCss(wave.color, wave.alpha));
+    grad.addColorStop(1, rgbToCss(wave.color, 0));
+    ctx.fillStyle = grad;
+    
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    for (let x = 0; x <= w; x += 12) {
+      const y = h * wave.heightOffset + 
+                Math.sin(x * wave.freq + t * wave.speed + idx * 1.8) * wave.amp * liquidBreath + 
+                Math.cos(x * 0.012 - t * wave.speed * 0.45) * (wave.amp * 0.35);
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    ctx.fill();
+  });
   ctx.restore();
 
+  // Dark border vignette overlay for focus
   ctx.save();
-  ctx.globalCompositeOperation = "multiply";
-  const sheen = ctx.createLinearGradient(0, 0, 0, h);
-  sheen.addColorStop(0, `rgba(255,255,255,${.08 + breath * .18})`);
-  sheen.addColorStop(.45, "rgba(255,255,255,.62)");
-  sheen.addColorStop(1, "rgba(255,255,255,.96)");
-  ctx.fillStyle = sheen;
+  const vignette = ctx.createRadialGradient(w/2, h/2, w * 0.28, w/2, h/2, w * 0.72);
+  vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+  vignette.addColorStop(1, "rgba(2, 4, 8, 0.72)");
+  ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, w, h);
   ctx.restore();
 
-  const dotsTop = h * .44;
-  const spacing = 13;
-  for (let y = dotsTop; y < h * .98; y += spacing) {
-    for (let x = -20; x < w + 20; x += spacing) {
-      const nx = x / w;
-      const ny = (y - dotsTop) / (h * .54);
-      const curve = .34 + Math.sin(nx * 7 + t * .34) * .08 + Math.cos(nx * 3 - t * .24) * .05;
-      const ridge = Math.exp(-Math.pow(ny - curve, 2) * 22);
-      const wave = Math.sin(nx * 26 + ny * 15 - t * (1.6 + (light.speed || 50) / 70));
-      const fade = Math.max(0, 1 - ny * .82);
-      const alpha = Math.max(0, (.025 + ridge * .34 + wave * .035) * fade * power);
-      const size = .8 + ridge * 2.4 + Math.max(0, wave) * .55;
-      ctx.fillStyle = rgbToCss(blend(blend(primary, warm, nx), secondary, ny * .35), alpha);
-      ctx.beginPath();
-      ctx.arc(x + Math.sin(y * .015 + t * .65) * 4, y, size, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
+  // Floating background particles (breathing from left to right, no geometric 6-pointed star pattern)
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ambientParticles.forEach(p => {
+    // Wave delay based on x coordinate (left to right)
+    const waveDelay = p.x * 5.5; 
+    const breatheSpeed = 1.8 * speedScale;
+    
+    // Particle size breathes (gently scaling up and down)
+    const breath = 0.85 + 0.65 * Math.sin(t * breatheSpeed - waveDelay + p.phase);
+    
+    // Slow organic floating float/drift
+    const floatY = Math.sin(t * p.speed + p.phase) * 12;
+    const floatX = Math.cos(t * p.speed * 0.5 + p.phase) * 8;
+    
+    const px = p.x * w + floatX;
+    const py = p.y * h + floatY;
+    
+    const c = blend(blend(primary, warm, p.x), secondary, p.y * 0.4);
+    const size = p.size * breath;
+    const alpha = p.alpha * power * (0.35 + 0.65 * (breath / 1.5));
+    
+    ctx.fillStyle = rgbToCss(c, alpha);
+    ctx.beginPath();
+    ctx.arc(px, py, size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
 }
 
 function lightFromStatus() {
   const manual = els.manual.value;
   if (manual) return DEFAULT_LIGHTS[manual];
-  const light = currentStatus.light || DEFAULT_LIGHTS[currentStatus.state] || DEFAULT_LIGHTS.offline;
-  const intent = light.intent || currentStatus.state || "offline";
-  return { ...DEFAULT_LIGHTS[intent] || DEFAULT_LIGHTS.offline, ...light, intent };
+  const intent = currentStatus.state || "offline";
+  return { ...(DEFAULT_LIGHTS[intent] || DEFAULT_LIGHTS.offline), intent };
 }
 
 function intensity(light) {
@@ -491,40 +772,103 @@ function matrixColor(light, x, y, w, h, t) {
   const intent = light.intent;
   const primary = hexToRgb(light.primary);
   const secondary = hexToRgb(light.secondary);
-  const accent = hexToRgb("#E0F2FE");
   const cx = (w - 1) / 2;
   const cy = (h - 1) / 2;
   const dx = x - cx;
   const dy = y - cy;
   const dist = Math.sqrt(dx * dx + dy * dy);
-  const pulse = (Math.sin(t * 2.2) + 1) / 2;
 
   if (intent === "idle") {
-    const wave = (Math.sin(x * 1.35 + y * .9 + t * .75) + Math.sin(y * 1.7 - t * .55)) * .25 + .5;
-    return scale(blend(secondary, primary, wave), .18 + .55 * wave);
+    // aurora_core: Swirling fluid vector field
+    const angle = Math.atan2(dy, dx);
+    const swirl = Math.sin(dist * 0.6 - t * 1.5 + angle);
+    const wave = (Math.sin(x * 0.5 + t * 0.8) + Math.cos(y * 0.5 - t * 0.6) + swirl) / 3;
+    const normWave = wave * 0.5 + 0.5;
+    const c = blend(primary, secondary, normWave);
+    const breathe = 0.55 + 0.45 * Math.sin(t * 1.2);
+    return scale(c, (0.2 + 0.8 * normWave) * breathe);
   }
+  
   if (intent === "thinking") {
-    const core = Math.max(0, 1 - dist / (w * .52));
-    const drift = (Math.sin(x * 1.8 + t * 1.4) + Math.cos(y * 1.6 - t * 1.2)) * .25 + .5;
-    const sparkle = Math.sin((x * 17 + y * 31) + t * 6) > .94 ? 1 : 0;
-    return scale(blend(primary, secondary, drift), .15 + core * (.85 + pulse * .25) + sparkle * .65);
+    // quantum_drift: Gold center core with organic ripple & sparks
+    const ripple = Math.sin(dist * 1.5 - t * 4) * 0.15;
+    const coreVal = Math.max(0, 1 - (dist + ripple) / (w * 0.42));
+    const goldColor = primary; 
+    const cyanColor = secondary; 
+    
+    const seed = Math.sin(x * 45.3 + y * 92.7) * 1000;
+    const phase = seed - Math.floor(seed);
+    const sparkleVal = Math.max(0, Math.sin(t * 3.5 + phase * 6.28) - 0.78) * 4.5;
+    
+    const angle = Math.atan2(dy, dx);
+    const swirl = Math.max(0, Math.sin(angle * 3 + dist * 0.5 - t * 3.5) * 0.5 + 0.5) * (1 - coreVal);
+    
+    const c = blend(goldColor, cyanColor, Math.min(1, dist / (w * 0.5)));
+    const k = coreVal * (0.65 + 0.35 * Math.sin(t * 2.8)) + (sparkleVal * 0.65 + swirl * 0.35) * (1 - coreVal * 0.7);
+    return scale(c, Math.max(0.04, k));
   }
+  
   if (intent === "busy") {
-    const stream = ((x + Math.floor(t * 5 + y * 1.7)) % Math.max(2, w)) / Math.max(1, w - 1);
-    const packet = stream < .18 ? 1 : 0;
-    return scale(blend(primary, secondary, stream), .18 + packet * .95 + (1 - stream) * .25);
+    // data_stream: Falling liquid-drops matrix rain
+    const colSpeed = 8 + Math.abs(Math.sin(x * 33.3) * 6);
+    const packetPos = (t * colSpeed + Math.abs(Math.sin(x * 77.7) * 50)) % (h * 2.2);
+    let diff = y - packetPos;
+    if (diff < -h * 0.5) diff += h * 2.2;
+    
+    let c = primary; 
+    let k = 0.05; 
+    
+    if (diff >= -1 && diff <= 0) {
+      c = { r: 235, g: 245, b: 255 }; // Bright liquid packet head
+      k = 1.0;
+    } else if (diff > 0 && diff < 5) {
+      const ratio = diff / 5;
+      c = blend(secondary, primary, ratio); // purple to blue
+      const waveOffset = Math.sin(y * 1.2 - t * 6) * 0.12;
+      k = (0.85 * (1 - ratio) + 0.05) * (1 + waveOffset);
+    }
+    return scale(c, k);
   }
+  
   if (intent === "approval") {
-    const edge = x === 0 || y === 0 || x === w - 1 || y === h - 1;
-    const flash = Math.sin(t * 12) > 0;
-    const center = dist < 1.15;
-    if (center && flash) return accent;
-    return scale(edge ? blend(primary, secondary, pulse) : primary, edge ? .95 : .12);
+    // alert_gate: Red-orange border liquid fire + center heartbeat pulse
+    const isBorder = (x === 0 || y === 0 || x === w - 1 || y === h - 1);
+    if (isBorder) {
+      const perimeterPos = (x + y * 2 + t * 12) % 16;
+      const ripple = Math.max(0, Math.sin(perimeterPos - t * 4) * 0.5 + 0.5);
+      const c = blend(primary, secondary, ripple);
+      return scale(c, 0.45 + 0.55 * ripple);
+    } else {
+      const beat = Math.pow(Math.max(0, Math.sin(t * 6.5)), 5) * 0.85 + Math.pow(Math.max(0, Math.sin(t * 6.5 - 0.4)), 5) * 0.65;
+      const c = { r: 255, g: 225, b: 210 }; // warm white flash
+      return scale(c, Math.max(0.04, beat));
+    }
   }
+
+  if (intent === "done") {
+    // holo_bloom: Liquid ripple expanding
+    const cycle = 1.6;
+    const phase = (t % cycle) / cycle; 
+    const waveRadius = phase * w * 0.95;
+    const distToWave = Math.abs(dist - waveRadius);
+    const waveVal = Math.exp(-distToWave * distToWave * 2.0) * (1 - phase);
+    const reflection = Math.exp(-Math.pow(dist - waveRadius + 0.5, 2) * 4.0) * 0.3 * (1 - phase);
+    const breath = 0.15 + 0.15 * Math.sin(t * 3.0);
+    
+    const c = blend(primary, secondary, dist / (w * 0.65));
+    const k = (waveVal + reflection) * 1.0 + breath;
+    return scale(c, Math.max(0.04, k));
+  }
+  
   if (intent === "offline") {
-    const active = x === 0 && y === 0;
-    return scale(secondary, active ? .25 + .45 * pulse : .04);
+    const isActive = (x === w - 1 && y === h - 1);
+    if (isActive) {
+      const breathe = 0.08 + 0.42 * ((Math.sin(t * 1.5) + 1) / 2);
+      return scale(secondary, breathe);
+    }
+    return scale(primary, 0.02);
   }
+  
   return primary;
 }
 
@@ -536,11 +880,13 @@ function drawMatrix(canvas, w, h) {
   const gap = canvas.width * .018;
   const cell = (canvas.width - margin * 2 - gap * (w - 1)) / w;
   const yOffset = (canvas.height - (cell * h + gap * (h - 1))) / 2;
-  clear(ctx, canvas);
+  
+  clearMatrix(ctx, canvas, w, h, margin, cell, gap, yOffset);
+  
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const c = matrixColor(light, x, y, w, h, t);
-      drawLed(ctx, margin + x * (cell + gap) + cell / 2, yOffset + y * (cell + gap) + cell / 2, cell * .36, c, intensity(light));
+      drawLed(ctx, margin + x * (cell + gap) + cell / 2, yOffset + y * (cell + gap) + cell / 2, cell * 0.35, c, intensity(light));
     }
   }
 }
@@ -551,19 +897,117 @@ function drawRing(canvas, count) {
   const t = performance.now() / 1000;
   const primary = hexToRgb(light.primary);
   const secondary = hexToRgb(light.secondary);
-  clear(ctx, canvas);
   const cx = canvas.width / 2, cy = canvas.height / 2;
   const radius = canvas.width * .33;
   const speed = .7 + (light.speed || 50) / 100;
+
+  // Clear with custom circular PCB texture
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#03060c";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Outer circular board
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.lineWidth = canvas.width * 0.16;
+  ctx.strokeStyle = "#080d18";
+  ctx.stroke();
+  
+  // Translucent glowing acrylic light-guide ring under the LEDs
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.lineWidth = canvas.width * 0.07;
+  ctx.strokeStyle = rgbToCss(blend(primary, secondary, 0.5 + 0.3 * Math.sin(t)), 0.12 * intensity(light));
+  ctx.stroke();
+  
+  // Add a bright core wire inside the tube
+  ctx.lineWidth = canvas.width * 0.018;
+  ctx.strokeStyle = rgbToCss(blend(primary, secondary, 0.5), 0.06 * intensity(light));
+  ctx.stroke();
+  ctx.restore();
+  
+  // PCB traces
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius - canvas.width * 0.05, 0, Math.PI * 2);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(255, 170, 0, 0.02)";
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + canvas.width * 0.05, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255, 170, 0, 0.02)";
+  ctx.stroke();
+  
+  // Metal divider lines on board
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.012)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < count; i++) {
+    const a = i / count * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * (radius - canvas.width * 0.08), cy + Math.sin(a) * (radius - canvas.width * 0.08));
+    ctx.lineTo(cx + Math.cos(a) * (radius + canvas.width * 0.08), cy + Math.sin(a) * (radius + canvas.width * 0.08));
+    ctx.stroke();
+  }
+
+  // Draw background gold glow for thinking core in center of ring
+  if (light.intent === "thinking") {
+    const coreGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.75);
+    coreGrd.addColorStop(0, rgbToCss(primary, 0.45));
+    coreGrd.addColorStop(0.5, rgbToCss(primary, 0.12));
+    coreGrd.addColorStop(1, rgbToCss(primary, 0));
+    ctx.fillStyle = coreGrd;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 0.75, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Draw done expanded center wave
+  if (light.intent === "done") {
+    const phase = (t % 1.8) / 1.8;
+    const bloomGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 1.5 * phase);
+    bloomGrd.addColorStop(0, rgbToCss(primary, 0));
+    bloomGrd.addColorStop(0.75, rgbToCss(primary, 0.35 * (1 - phase)));
+    bloomGrd.addColorStop(0.9, rgbToCss(secondary, 0.4 * (1 - phase)));
+    bloomGrd.addColorStop(1, rgbToCss(secondary, 0));
+    ctx.fillStyle = bloomGrd;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   for (let i = 0; i < count; i++) {
     const a = -Math.PI / 2 + i / count * Math.PI * 2;
     let k = .2;
-    if (light.intent === "idle") k = .28 + .45 * ((Math.sin(i * .9 + t * .8) + 1) / 2);
-    if (light.intent === "thinking") k = .18 + .9 * Math.max(0, Math.cos(i / count * Math.PI * 2 - t * speed));
-    if (light.intent === "busy") k = .15 + .9 * Math.max(0, Math.cos(i / count * Math.PI * 6 - t * speed * 2));
-    if (light.intent === "approval") k = Math.sin(t * 12) > 0 ? .95 : .18;
-    if (light.intent === "offline") k = i === Math.floor(t * 1.2) % count ? .5 : .06;
-    const c = blend(primary, secondary, (Math.sin(i + t) + 1) / 2);
+    let c = primary;
+    
+    if (light.intent === "idle") {
+      k = .25 + .45 * ((Math.sin(i * 0.8 + t * 1.2) + 1) / 2);
+      c = blend(primary, secondary, (Math.sin(i * 0.4 + t) + 1) / 2);
+    } else if (light.intent === "thinking") {
+      const chase = Math.max(0, Math.sin(i / count * Math.PI * 2 - t * speed * 2) * 0.5 + 0.5);
+      const spark = Math.sin(i * 13.3 + t * 6) > 0.88 ? 0.7 : 0;
+      k = 0.15 + chase * 0.65 + spark * 0.2;
+      c = secondary;
+    } else if (light.intent === "busy") {
+      // Liquid spin flow chasing
+      const val = Math.pow(Math.max(0, Math.sin(i / count * Math.PI * 4 - t * speed * 3.5)), 4);
+      k = 0.1 + val * 0.85;
+      c = blend(primary, secondary, val);
+    } else if (light.intent === "approval") {
+      const strobe = Math.sin(t * 16) > 0;
+      k = strobe ? 0.95 : 0.15;
+      c = blend(primary, secondary, Math.sin(i * 0.6 + t * 8) * 0.5 + 0.5);
+    } else if (light.intent === "done") {
+      const wave = Math.max(0, 1 - Math.abs((i / count) - (t % 1.5) / 1.5) * 4);
+      k = 0.2 + wave * 0.75 + Math.sin(t * 4) * 0.1;
+      c = primary;
+    } else if (light.intent === "offline") {
+      k = i === 0 ? 0.08 + 0.38 * ((Math.sin(t * 1.5) + 1) / 2) : 0.03;
+      c = secondary;
+    }
+    
     drawLed(ctx, cx + Math.cos(a) * radius, cy + Math.sin(a) * radius, canvas.width * .035, scale(c, k), intensity(light));
   }
 }
@@ -574,19 +1018,90 @@ function drawBar(canvas, count) {
   const t = performance.now() / 1000;
   const primary = hexToRgb(light.primary);
   const secondary = hexToRgb(light.secondary);
-  clear(ctx, canvas);
+
   const margin = canvas.width * .13;
   const gap = canvas.width * .035;
   const cell = (canvas.width - margin * 2 - gap * (count - 1)) / count;
   const y = canvas.height / 2;
+
+  // Clear with custom slotted bar housing texture
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#03060c";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Outer grooved bezel
+  ctx.fillStyle = "#070b13";
+  ctx.fillRect(margin - gap, y - cell * 0.85, canvas.width - (margin - gap) * 2, cell * 1.7);
+  ctx.strokeStyle = "rgba(255,255,255,0.03)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(margin - gap, y - cell * 0.85, canvas.width - (margin - gap) * 2, cell * 1.7);
+  
+  // Draw light-guide bar tube under LEDs (acrylic neon diffuser)
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.beginPath();
+  ctx.moveTo(margin + cell / 2, y);
+  ctx.lineTo(canvas.width - margin - cell / 2, y);
+  ctx.lineWidth = cell * 0.7;
+  ctx.strokeStyle = rgbToCss(blend(primary, secondary, 0.5 + 0.2 * Math.sin(t)), 0.12 * intensity(light));
+  ctx.lineCap = "round";
+  ctx.stroke();
+  
+  // Core wire inside tube
+  ctx.lineWidth = cell * 0.18;
+  ctx.strokeStyle = rgbToCss(blend(primary, secondary, 0.5), 0.06 * intensity(light));
+  ctx.stroke();
+  ctx.restore();
+  
+  // Slots background
+  ctx.fillStyle = "#020408";
+  for (let i = 0; i < count; i++) {
+    const cx = margin + i * (cell + gap) + cell / 2;
+    ctx.fillRect(cx - cell * 0.6, y - cell * 0.6, cell * 1.2, cell * 1.2);
+  }
+
   for (let i = 0; i < count; i++) {
     let k = .2;
-    if (light.intent === "idle") k = i >= 2 && i <= 3 ? .45 : .16;
-    if (light.intent === "thinking") k = .25 + .6 * ((Math.sin(i * 1.2 + t * 2.2) + 1) / 2);
-    if (light.intent === "busy") k = .2 + .85 * Math.max(0, Math.cos(i - t * 4));
-    if (light.intent === "approval") k = Math.sin(t * 13) > 0 ? .95 : .12;
-    if (light.intent === "offline") k = i === 0 ? .35 + .35 * ((Math.sin(t * 2) + 1) / 2) : .04;
-    drawLed(ctx, margin + i * (cell + gap) + cell / 2, y, cell * .34, scale(blend(primary, secondary, i / Math.max(1, count - 1)), k), intensity(light));
+    let c = primary;
+    
+    if (light.intent === "idle") {
+      k = 0.2 + 0.6 * ((Math.sin(i * 0.8 - t * 2) + 1) / 2);
+      c = blend(primary, secondary, i / (count - 1));
+    } else if (light.intent === "thinking") {
+      const distFromCenter = Math.abs(i - (count - 1) / 2);
+      const isCenter = distFromCenter < 1.0;
+      c = isCenter ? primary : secondary;
+      k = isCenter ? 0.75 + 0.25 * Math.sin(t * 3.5) : 0.15 + 0.5 * ((Math.sin(t * 2 + i * 2) + 1) / 2);
+    } else if (light.intent === "busy") {
+      // Liquid flows along the bar
+      const colSpeed = 4.5;
+      const meteorPos = (t * colSpeed) % (count + 3) - 1.5;
+      const distToMeteor = i - meteorPos;
+      
+      k = 0.12;
+      if (distToMeteor >= -0.5 && distToMeteor <= 0.5) {
+        c = { r: 255, g: 255, b: 255 };
+        k = 1.0;
+      } else if (distToMeteor > 0.5 && distToMeteor < 3) {
+        const ratio = (distToMeteor - 0.5) / 2.5;
+        c = blend(secondary, primary, ratio);
+        k = 0.8 * (1 - ratio) + 0.12;
+      }
+    } else if (light.intent === "approval") {
+      const strobe = Math.sin(t * 16) > 0;
+      k = strobe ? 0.95 : 0.15;
+      c = blend(primary, secondary, i / (count - 1));
+    } else if (light.intent === "done") {
+      const phase = (t * 1.8) % 3.0;
+      const distFromCenter = Math.abs(i - (count - 1) / 2);
+      k = 0.15 + 0.8 * Math.max(0, 1 - Math.abs(distFromCenter - phase * 1.1) * 1.8);
+      c = primary;
+    } else if (light.intent === "offline") {
+      k = i === 0 ? 0.08 + 0.35 * ((Math.sin(t * 1.5) + 1) / 2) : 0.03;
+      c = secondary;
+    }
+    
+    drawLed(ctx, margin + i * (cell + gap) + cell / 2, y, cell * .34, scale(c, k), intensity(light));
   }
 }
 
@@ -596,11 +1111,92 @@ function drawPixel(canvas) {
   const t = performance.now() / 1000;
   const primary = hexToRgb(light.primary);
   const secondary = hexToRgb(light.secondary);
-  const pulse = (Math.sin(t * (light.intent === "approval" ? 12 : 2)) + 1) / 2;
-  const c = blend(primary, secondary, pulse);
-  const k = light.intent === "approval" ? (.2 + .9 * pulse) : (.35 + .45 * pulse);
-  clear(ctx, canvas);
-  drawLed(ctx, canvas.width / 2, canvas.height / 2, canvas.width * .12, scale(c, k), intensity(light));
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#03060c";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  const size = canvas.width * 0.14;
+  
+  // Multi-layered metallic housing rims for the giant pixel
+  // Rim 1 (Outer dark plastic)
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 1.75, 0, Math.PI * 2);
+  ctx.fillStyle = "#090d16";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.03)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Rim 2 (Silver metallic casing)
+  const rimGrd = ctx.createLinearGradient(cx - size, cy - size, cx + size, cy + size);
+  rimGrd.addColorStop(0, "#5a6a85");
+  rimGrd.addColorStop(0.3, "#1a2333");
+  rimGrd.addColorStop(0.5, "#0b0f19");
+  rimGrd.addColorStop(0.7, "#1e293b");
+  rimGrd.addColorStop(1, "#475569");
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 1.52, 0, Math.PI * 2);
+  ctx.fillStyle = rimGrd;
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Rim 3 (Inner rubber seal ring)
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 1.3, 0, Math.PI * 2);
+  ctx.fillStyle = "#05070c";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.8)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Multiple layered glowing halos behind the giant lens
+  let k = 0.5;
+  let c = primary;
+  if (light.intent === "idle") {
+    const pulse = (Math.sin(t * 1.5) + 1) / 2;
+    k = 0.35 + 0.5 * pulse;
+    c = blend(primary, secondary, pulse);
+  } else if (light.intent === "thinking") {
+    const pulse = (Math.sin(t * 3.5) + 1) / 2;
+    k = 0.4 + 0.5 * pulse;
+    c = blend(primary, secondary, pulse);
+  } else if (light.intent === "busy") {
+    const pulse = (Math.sin(t * 7.5) + 1) / 2;
+    k = 0.3 + 0.65 * pulse;
+    c = blend(secondary, primary, pulse);
+  } else if (light.intent === "approval") {
+    const pulse = Math.sin(t * 16) > 0 ? 0.95 : 0.15;
+    k = pulse;
+    c = primary;
+  } else if (light.intent === "done") {
+    const phase = (t % 1.5) / 1.5;
+    k = 0.2 + 0.75 * (1 - phase);
+    c = primary;
+  } else if (light.intent === "offline") {
+    k = 0.08 + 0.32 * ((Math.sin(t * 1.2) + 1) / 2);
+    c = secondary;
+  }
+
+  // Draw giant dynamic aura bloom under the glass lens
+  if (k > 0.01) {
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    const haloGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 4.2);
+    haloGrd.addColorStop(0, rgbToCss(c, k * intensity(light) * 0.45));
+    haloGrd.addColorStop(0.5, rgbToCss(c, k * intensity(light) * 0.12));
+    haloGrd.addColorStop(1, rgbToCss(c, 0));
+    ctx.fillStyle = haloGrd;
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * 4.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  
+  drawLed(ctx, cx, cy, size, c, k * intensity(light));
 }
 
 function render() {
@@ -620,7 +1216,7 @@ async function fetchStatus() {
   localStorage.setItem("agentLightPreviewUrl", url);
   localStorage.setItem("agentLightPreviewToken", token);
   if (!url || !token) {
-    lastError = "请填写 token 后开始";
+    lastError = "请填写 token 并保存以开始拉取";
     updateMeta();
     return;
   }
@@ -650,16 +1246,16 @@ async function fetchStatus() {
 }
 
 function normalizeStatus(status) {
-  const intent = status?.light?.intent || status?.state || "offline";
+  const intent = status?.state || "offline";
   const base = DEFAULT_LIGHTS[intent] || DEFAULT_LIGHTS.offline;
-  return { ...status, light: { ...base, ...(status.light || {}), intent } };
+  return { ...status, visual: { ...base, intent } };
 }
 
 function updateMeta() {
   const status = els.manual.value ? makeStatus(els.manual.value) : currentStatus;
-  const light = status.light || {};
+  const visual = status.visual || {};
   els.state.textContent = status.state || "-";
-  els.intent.textContent = light.intent || "-";
+  els.intent.textContent = visual.intent || "-";
   els.event.textContent = status.event || "-";
   els.updated.textContent = status.updatedAt || (lastFetchAt ? new Date(lastFetchAt).toLocaleTimeString() : "-");
   els.raw.textContent = lastError

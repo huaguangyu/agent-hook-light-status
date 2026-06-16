@@ -2,6 +2,15 @@
 
 本文记录 Agent Light 的本地构建和 GitHub Actions 自动发布方式。
 
+第一次部署不一定需要看本文。只想本机运行可以直接用：
+
+```bash
+cd /Users/apple/user/VscodeProject/agent_light/server
+go run .
+```
+
+需要后台运行、拷贝到服务器、或发布 GitHub Release 时，再按本文构建二进制。
+
 ## 本地构建 Go 服务端
 
 Go 服务端在 `server/` 目录，构建脚本是：
@@ -28,7 +37,7 @@ server/dist/agent-light-server-darwin-arm64
 server/dist/agent-light-server-linux-amd64
 ```
 
-本项目服务端只用 Go 标准库，`CGO_ENABLED=0`，所以 GitHub Actions 可以直接交叉编译 macOS arm64 和 Linux x64。
+本项目服务端使用 Go 标准库 HTTP，并依赖 `github.com/eclipse/paho.mqtt.golang` 推送 WLED MQTT。构建时 `CGO_ENABLED=0`，所以 GitHub Actions 可以直接交叉编译 macOS arm64 和 Linux x64。
 
 ## CI/CD 自动构建
 

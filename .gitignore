@@ -16,6 +16,7 @@
 server/build/
 server/dist/
 server/run/
+server/env.json
 server/*.log
 server/*.pid
 

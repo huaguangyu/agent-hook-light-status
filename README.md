@@ -1,35 +1,260 @@
 # Agent Light
 
-Agent Light 是一个面向编程工具状态灯的统一方案。它接收 Codex、Claude Code、Antigravity 的 hooks 事件，转换成统一状态，上报到本地或远程 server，再由 ESP32-C3 通过 Wi-Fi 获取状态并驱动红黄绿三色灯。
+Agent Light 是一个面向编程工具状态灯的统一方案。它接收 Codex、Claude Code、Antigravity 的 hooks 事件，转换成统一状态，上报到本地或远程 Go server，再由 server 通过 MQTT 调用 WLED preset，让 WLED 设备显示对应灯效。
 
-本文已经合并原来的安装手册、事件映射和项目规划内容，是当前项目主文档。
+本文是当前项目主文档。第一次部署可以直接看 [QUICKSTART.md](QUICKSTART.md)，或者按本文“新手快速部署”一步步操作；能跑通后再看后面的事件映射和高级说明。
 
 ## 目录
 
-1. [目标灯效](#目标灯效)
-2. [系统架构](#系统架构)
-3. [项目结构](#项目结构)
-4. [首次使用](#首次使用)
-5. [安装方式](#安装方式)
-6. [三家 hooks 配置](#三家-hooks-配置)
-7. [统一事件与 API](#统一事件与-api)
-8. [状态映射](#状态映射)
-9. [运行配置](#运行配置)
-10. [本地测试](#本地测试)
-11. [故障排查](#故障排查)
-12. [项目规划](#项目规划)
-13. [参考文档](#参考文档)
+1. [新手快速部署](#新手快速部署)
+2. [目标灯效](#目标灯效)
+3. [系统架构](#系统架构)
+4. [项目结构](#项目结构)
+5. [首次使用](#首次使用)
+6. [安装方式](#安装方式)
+7. [三家 hooks 配置](#三家-hooks-配置)
+8. [统一事件与 API](#统一事件与-api)
+9. [状态映射](#状态映射)
+10. [运行配置](#运行配置)
+11. [本地测试](#本地测试)
+12. [故障排查](#故障排查)
+13. [项目规划](#项目规划)
+14. [参考文档](#参考文档)
+15. [许可证](#许可证)
+
+## 新手快速部署
+
+这一节按“先让灯亮起来”的顺序写。你只需要先准备一盏刷了 WLED 的 ESP32 灯、一个 MQTT broker、一个运行 Agent Light Server 的机器。
+
+### 0. 你需要知道的 4 个名字
+
+| 名字 | 示例 | 用在哪里 |
+| --- | --- | --- |
+| `deviceId` | `desk-light-01` | Agent Light 里这盏灯/这个用户的唯一名字 |
+| WLED Device Topic | `wled/desk-light-01` | WLED MQTT 页面里填写，注意不带 `/api` |
+| server MQTT topic | `wled/%s` | `server/env.json` 里填写，`%s` 会替换成 `deviceId` |
+| server 实际发布 topic | `wled/desk-light-01/api` | Go server 自动生成，不需要你手写到 WLED 里 |
+
+最重要的一句：**WLED 的 Device Topic 填 `wled/desk-light-01`，不要填 `wled/desk-light-01/api`。**
+
+### 1. 刷 WLED 固件
+
+设备端只使用 WLED 固件，不再使用本项目自写 PlatformIO 固件。
+
+1. 打开 [WLED Web Installer](https://install.wled.me)。
+2. 用 USB 连接 ESP32-C3 Pro Mini，选择串口并刷入 WLED。
+3. 首次启动后连接 WLED 创建的热点。
+4. 打开 `http://4.3.2.1`，配置 Wi-Fi。
+5. 进入 WLED 页面后配置 LED 硬件参数。
+
+当前推荐硬件：
+
+| 项 | 值 |
+| --- | --- |
+| 外壳模型 | [Minecraft 矿石灯 WLED ESP32 D1 mini USB-C](https://makerworld.com.cn/zh/models/1710654-minecraft-kuang-shi-deng-wled-esp32-d1-mini-usb-c?appSharePlatform=wx#profileId-1882613) |
+| 开发板 | ESP32-C3 Pro Mini |
+| 灯板 | 12 灯珠 WS2812B 环形灯珠 |
+| WLED LED 类型 | WS281x / WS2812 |
+| LED 数量 | 12 |
+
+如果 WLED 后面连不上 Wi-Fi，通常会重新开 `WLED-AP` 热点。连接热点后打开 `http://4.3.2.1` 重新配网。
+
+### 2. 启动 Go Server
+
+```bash
+cd /Users/apple/user/VscodeProject/agent_light/server
+go run .
+```
+
+第一次启动会自动创建：
+
+```text
+server/env.json
+```
+
+里面会写入真实的 `collectorToken` 和 `deviceToken`。打开它，把 MQTT 配好：
+
+```json
+{
+  "collectorToken": "自动生成的-collector-token",
+  "deviceToken": "自动生成的-device-token",
+  "host": "127.0.0.1",
+  "port": 4318,
+  "idleTtlMs": 1200000,
+  "maxRecentEvents": 100,
+  "mqttBroker": "tcp://<broker-host>:1883",
+  "mqttClientId": "agent-light-server",
+  "mqttUser": "",
+  "mqttPass": "",
+  "mqttTopic": "wled/%s"
+}
+```
+
+改完后重启 server。确认 server 正常：
+
+```bash
+curl http://127.0.0.1:4318/health
+```
+
+返回：
+
+```json
+{
+  "ok": true
+}
+```
+
+### 3. 配 WLED MQTT
+
+进入 WLED 网页 UI：
+
+```text
+Config -> Sync Interfaces -> MQTT
+```
+
+填写：
+
+| 配置项 | 示例 |
+| --- | --- |
+| Enable MQTT | 勾选 |
+| Broker | `<broker-host>`，不要写 `tcp://` |
+| Port | `1883` |
+| Username / Password | 按你的 MQTT broker 填 |
+| Device Topic | `wled/desk-light-01` |
+| Group Topic | `wled/all` |
+
+保存后，如果页面提示 `Reboot required to apply changes`，重启 WLED。
+
+### 4. 在 WLED 里保存 4 个 Preset
+
+服务端只调用 preset ID，具体颜色和动画在 WLED 里配置。你需要在每台 WLED 设备里保存：
+
+| Preset ID | WLED preset 名称 | 状态 |
+| --- | --- | --- |
+| 1 | `Agent Idle` | 空闲 |
+| 2 | `Agent Thinking` | 思考 |
+| 3 | `Agent Busy` | 忙碌 |
+| 4 | `Agent Approval` | 等待审批 |
+
+每块灯板都可以把这 4 个 preset 调成最适合自己的样子。比如 8x8 可以做数据流，12 环可以做旋转光环，但 ID 和名称保持一致。
+
+### 5. 用 MQTT 工具先测试 WLED
+
+订阅：
+
+```text
+wled/#
+```
+
+发布：
+
+```text
+Topic:   wled/desk-light-01/api
+Payload: T=1&PL=1
+QoS:     0
+Retain:  false
+```
+
+灯应该切到 Preset 1。继续测试：
+
+```text
+T=1&PL=2
+T=1&PL=3
+T=1&PL=4
+```
+
+如果 MQTT 工具能看到消息但灯不变，优先检查 WLED Device Topic 是否误填成了 `wled/desk-light-01/api`。
+
+### 6. 配 Collector
+
+选择你要接入的工具：
+
+| 工具 | 配置文档 |
+| --- | --- |
+| Codex | [collector/codex/README.md](collector/codex/README.md) |
+| Claude Code | [collector/claude-code/README.md](collector/claude-code/README.md) |
+| Antigravity | [collector/antigravity/README.md](collector/antigravity/README.md) |
+
+每个 collector 脚本顶部都有这几项：
+
+```js
+const DEVICE_ID = "desk-light-01";
+const SERVER_URL = "http://127.0.0.1:4318";
+const COLLECTOR_TOKEN = "填 server/env.json 里的 collectorToken";
+```
+
+`DEVICE_ID` 必须和 WLED topic 对上：
+
+```text
+DEVICE_ID=desk-light-01
+WLED Device Topic=wled/desk-light-01
+server 发布=wled/desk-light-01/api
+```
+
+远程部署时，`SERVER_URL` 改成你的服务端地址，例如：
+
+```text
+http://你的服务器:4318
+```
+
+### 7. 安装 hooks
+
+按你使用的工具，把示例 hooks 配置合并到对应的全局配置文件：
+
+| 工具 | 全局配置文件 | 示例文件 | 详细说明 |
+| --- | --- | --- | --- |
+| Codex | `~/.codex/hooks.json` | `collector/codex/hooks.example.json` | [collector/codex/README.md](collector/codex/README.md) |
+| Claude Code | `~/.claude/settings.json` | `collector/claude-code/settings.example.json` | [collector/claude-code/README.md](collector/claude-code/README.md) |
+| Antigravity | `~/.gemini/config/hooks.json` | `collector/antigravity/hooks.example.json` | [collector/antigravity/README.md](collector/antigravity/README.md) |
+
+安装原则：
+
+```text
+不要整文件覆盖已有全局配置
+只合并 Agent Light 相关 hooks
+command 里写本项目 collector 脚本的绝对路径
+```
+
+Codex 配完后，在 Codex 里运行 `/hooks`，信任新增或变更的 hooks。Claude Code 和 Antigravity 配完后，重启或新开会话验证。
+
+### 8. 验证完整链路
+
+先手动发一个事件：
+
+```bash
+curl -s -X POST \
+  -H 'Authorization: Bearer <collector-token>' \
+  -H 'Content-Type: application/json' \
+  http://127.0.0.1:4318/api/devices/desk-light-01/events \
+  -d '{"source":"manual","state":"approval","event":"ManualTest","message":"测试审批"}'
+```
+
+查状态：
+
+```bash
+curl -s -H 'Authorization: Bearer <device-token>' \
+  http://127.0.0.1:4318/api/devices/desk-light-01/status
+```
+
+查事件：
+
+```bash
+curl -s -H 'Authorization: Bearer <device-token>' \
+  'http://127.0.0.1:4318/api/devices/desk-light-01/events?limit=20&details=1'
+```
+
+看到 `/status` 变化且 WLED 切到 Preset 4，就说明链路通了。
 
 ## 目标灯效
 
 最终只关注 4 个统一状态：
 
-| 状态 | code | 灯效 | 含义 |
+| 状态 | code | HTTP `color` | WLED 表现 |
 | --- | --- | --- | --- |
-| 空闲 | `idle` | 绿灯常亮 | 当前没有任务，或本轮任务结束 |
-| 思考 | `thinking` | 黄灯呼吸 / 慢闪 | AI 正在分析、生成、整理回复 |
-| 忙碌 | `busy` | 红灯常亮 | AI 正在执行命令、改文件、调用工具 |
-| 需要审批 | `approval` | 红灯快闪 | 需要你参与，通常是等待授权或确认 |
+| 空闲 | `idle` | `green` | 当前没有任务，或本轮任务结束 |
+| 思考 | `thinking` | `yellow` | AI 正在分析、生成、整理回复 |
+| 忙碌 | `busy` | `red` | AI 正在执行命令、改文件、调用工具 |
+| 需要审批 | `approval` | `red` | 需要你参与，通常是等待授权或确认 |
 
 核心原则：
 
@@ -54,12 +279,12 @@ collector 数据收集端
         v
 server 状态处理端
         |
-        | GET /api/devices/:deviceId/status
+        | MQTT publish: wled/<deviceId>/api  (T=1&PL=<preset>)
         v
-ESP32-C3 固件
+WLED 设备
         |
         v
-红 / 黄 / 绿 LED
+WS2812 / WS2812B 灯板
 ```
 
 当前实现按 device-id 分区，每个 device（用户/灯）一份独立状态：
@@ -67,10 +292,19 @@ ESP32-C3 固件
 ```text
 collector 上报到 /api/devices/<deviceId>/events -> 覆盖该 deviceId 的状态
 不同 deviceId 互不影响（多用户/多灯各自独立）
-超过 AGENT_LIGHT_IDLE_TTL_MS 未更新 -> 该 deviceId 回落 idle/绿灯
+超过 AGENT_LIGHT_IDLE_TTL_MS 未更新 -> 该 deviceId 回落 idle，并通过 MQTT 推送对应 WLED
 ```
 
 每个 deviceId 内部是 `last-write-wins + TTL`。同一用户名下所有 collector 填同一个 `DEVICE_ID`（共享一盏灯），不同用户填不同的（各亮各的）。
+
+当前职责边界固定为：
+
+| 模块 | 做什么 | 不做什么 |
+| --- | --- | --- |
+| collector | 读取三家工具的 hooks stdin，识别事件，映射成 `idle / thinking / busy / approval`，POST 给 server | 不直连灯、不连 MQTT、不保存状态 |
+| server | 鉴权、按 `deviceId` 保存当前状态和最近事件、TTL 回落 idle、把状态转换成 WLED preset 调用并推到 MQTT | 不生成 `light/effect/display` 视觉字段、不维护具体灯珠动画 |
+| MQTT broker | 转发 server 发布的 WLED API 消息 | 不理解业务状态 |
+| WLED 设备 | 订阅自己的 Device Topic，执行 preset，真正控制 WS2812 灯板 | 不主动查询 `/status`，不解析 Agent Light 自定义 JSON |
 
 ## 项目结构
 
@@ -85,18 +319,19 @@ agent_light/
   server/
     main.go
     daemon.go
+    mqtt.go
     build.sh
-    dev-server.js  (旧 Node 开发参考)
+    README.md
+  firmware/
+    README.md  (WLED 烧录与 MQTT 配置说明)
+  tools/
+    light-preview.html
 ```
 
 推荐长期目录结构：
 
 ```text
 agent_light/
-  packages/shared/
-    src/states.ts
-    src/event-schema.ts
-    src/light-effects.ts
   collector/
     shared/
     codex/
@@ -105,10 +340,11 @@ agent_light/
   server/
     main.go
     daemon.go
+    mqtt.go
     build.sh
     README.md
   firmware/
-    esp32-c3-agent-light/
+    README.md
   scripts/
     install-global-hooks.ts
     watch-status.ts
@@ -119,8 +355,8 @@ agent_light/
 | 层 | 推荐技术 | 职责 |
 | --- | --- | --- |
 | collector | Node.js / TypeScript | 读取 hooks stdin，映射统一事件，上报 server |
-| server | Go 标准库 HTTP | 鉴权、保存当前状态、提供设备查询接口、后台守护运行 |
-| firmware | PlatformIO / Arduino C++ | ESP32-C3 Wi-Fi 轮询状态并点灯 |
+| server | Go 标准库 HTTP + MQTT | 鉴权、保存当前状态、按 `deviceId` 发布 WLED preset 调用、后台守护运行 |
+| device | WLED 固件 | 订阅自己的 MQTT Device Topic，并执行设备端保存的 WLED preset |
 
 当前 server 主实现是 Go 版，接口兼容旧的 `server/dev-server.js`。
 
@@ -133,7 +369,7 @@ agent_light/
 | Node.js | 18+，collector 使用全局 `fetch` |
 | Go | 1.22+，server 编译使用 |
 | 编程工具 | Claude Code / Codex / Antigravity 任一 |
-| 设备 | ESP32-C3 + 红黄绿 LED；没有设备也能用 curl 看状态 |
+| 设备 | 当前默认：ESP32-C3 Pro Mini + 12 灯珠 WS2812B 环形灯珠 + WLED；没有设备也能用 curl 看状态 |
 
 验证 Node / Go：
 
@@ -142,7 +378,23 @@ node --version
 go version
 ```
 
-### 2. 启动 server
+### 2. 准备 MQTT broker
+
+WLED 设备和 Agent Light Server 都要能连到同一个 MQTT broker。
+
+```text
+server -> MQTT broker -> WLED
+```
+
+可以使用本机 / 局域网 mosquitto，也可以使用你自己的 EMQX、云 MQTT 或 NAS 上的 broker。文档里用占位地址：
+
+```text
+tcp://<broker-host>:1883
+```
+
+如果 broker 有账号密码，后面写到 `mqttUser` / `mqttPass`。
+
+### 3. 启动 server
 
 ```bash
 cd /Users/apple/user/VscodeProject/agent_light/server
@@ -191,13 +443,13 @@ server/dist/agent-light-server-darwin-arm64
 server/dist/agent-light-server-linux-amd64
 ```
 
-注意：Go 版服务端如果没有指定 token，每次启动都会随机生成 `Collector token` 和 `Device token`。后台启动时会打印一次，之后也可以通过 `server status` 查看当前运行中的 token：
+注意：Go 版服务端第一次启动时如果没有 `server/env.json`，会随机生成 `Collector token` 和 `Device token` 并写入 `env.json`。之后只要 `env.json` 还在，就会复用里面的 token。后台启动时会打印一次，之后也可以通过 `server status` 查看当前运行中的 token：
 
 ```bash
 ./build/darwin-arm64/agent-light-server server status
 ```
 
-collector 的 `AGENT_LIGHT_COLLECTOR_TOKEN`、设备查询的 `AGENT_LIGHT_DEVICE_TOKEN` 必须使用当前运行中的值。推荐用命令参数固定 token：
+collector 的 `AGENT_LIGHT_COLLECTOR_TOKEN` 必须使用 `server/env.json` 里的 `collectorToken`；`AGENT_LIGHT_DEVICE_TOKEN` 主要给 curl 调试和兼容 HTTP 查询使用。你也可以用命令参数指定 token，服务端会把最终值写回 `env.json`：
 
 ```bash
 ./build/darwin-arm64/agent-light-server \
@@ -221,6 +473,35 @@ collector 的 `AGENT_LIGHT_COLLECTOR_TOKEN`、设备查询的 `AGENT_LIGHT_DEVIC
 
 服务端完整使用方法见 [`server/README.md`](server/README.md)。
 
+当前推荐设备方案是 WLED + MQTT：服务端在状态变化时直接通过 MQTT 调用 WLED preset。推荐按 `deviceId` 隔离 topic：
+
+```json
+{
+  "collectorToken": "请替换为你的-collector-token",
+  "deviceToken": "请替换为你的-device-token",
+  "host": "127.0.0.1",
+  "port": 4318,
+  "idleTtlMs": 1200000,
+  "maxRecentEvents": 100,
+  "mqttBroker": "tcp://<broker-host>:1883",
+  "mqttClientId": "agent-light-server",
+  "mqttUser": "",
+  "mqttPass": "",
+  "mqttTopic": "wled/%s"
+}
+```
+
+真实配置写在 `server/env.json`；仓库提供 `server/env.example.json` 作为模板，`server/env.json` 不提交到 git。首次启动时如果没有 `env.json`，服务端会自动生成真实 token 并写入；命令行传入的 token、端口、MQTT 参数也会同步写回这个文件。
+
+这时：
+
+```text
+/api/devices/alice-light/events -> MQTT wled/alice-light/api
+/api/devices/bob-light/events   -> MQTT wled/bob-light/api
+```
+
+每个 WLED 设备的 MQTT Device Topic 分别填 `wled/alice-light`、`wled/bob-light`，并在 WLED 里保存 1-4 号 preset，就不会多用户设备互相打架。固定 topic 例如 `wled/desk-ring` 仍支持，但那是单设备共用模式。
+
 CI/CD 自动构建见 [`BUILD.md`](BUILD.md)。推送 `v*` tag 会自动构建 `darwin-arm64` 和 `linux-amd64`，并把带平台后缀的二进制文件附加到 GitHub Release：
 
 ```bash
@@ -228,7 +509,51 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-### 3. 装全局 hooks
+### 4. 刷 WLED 并保存 preset
+
+1. 打开 [WLED Web Installer](https://install.wled.me)，给 ESP32 / ESP32-C3 刷 WLED。
+2. 进入 WLED 网页 UI，配置 Wi-Fi。
+3. 配置 LED 硬件参数：LED 类型选 WS281x / WS2812，填 GPIO、灯珠数量、矩阵或环形布局。
+4. 配置 MQTT：`Config -> Sync Interfaces -> MQTT`，填 broker、账号密码、Device Topic。
+5. 在 WLED UI 里调好并保存 1-4 号 preset：
+
+| Preset ID | WLED preset 名称 | Agent state | 建议 |
+| --- | --- | --- | --- |
+| 1 | `Agent Idle` | `idle` | 低亮、平静、绿/青慢呼吸 |
+| 2 | `Agent Thinking` | `thinking` | 黄/金呼吸，带轻微流动 |
+| 3 | `Agent Busy` | `busy` | 蓝/紫流动、扫描、流星 |
+| 4 | `Agent Approval` | `approval` | 红/橙快闪或强提醒 |
+
+如果 `deviceId=desk-light-01`，WLED 的 Device Topic 填：
+
+```text
+wled/desk-light-01
+```
+
+server 会发布：
+
+```text
+wled/desk-light-01/api
+```
+
+payload 类似：
+
+```text
+T=1&PL=2
+```
+
+表示开灯并调用 WLED 设备端保存的 2 号 preset。
+
+当前默认硬件：
+
+| 项 | 内容 |
+| --- | --- |
+| 外壳模型 | [Minecraft 矿石灯 WLED ESP32 D1 mini USB-C](https://makerworld.com.cn/zh/models/1710654-minecraft-kuang-shi-deng-wled-esp32-d1-mini-usb-c?appSharePlatform=wx#profileId-1882613) |
+| 开发板 | ESP32-C3 Pro Mini |
+| 灯板 | 12 灯珠 WS2812B 环形灯珠 |
+| WLED LED 数量 | 12 |
+
+### 5. 装全局 hooks
 
 | 工具 | 全局配置文件 |
 | --- | --- |
@@ -255,7 +580,7 @@ hooks 里的 command 指向本项目 collector 脚本的绝对路径
 
 三家工具的全局配置文件只负责登记“某个 hook 事件发生时，调用哪个脚本”。
 
-### 4. 验证上报
+### 6. 验证上报
 
 用任一工具做个动作，然后查状态：
 
@@ -264,7 +589,24 @@ curl -s -H 'Authorization: Bearer <device-token>' \
   http://127.0.0.1:4318/api/devices/desk-light-01/status
 ```
 
-应看到 `state` / `color` / `effect` 随活动变化。
+应看到 `state` / `color` / `message` 随活动变化。WLED 的具体动画由设备端 preset 决定，server 只通过 MQTT 发布 `PL=<preset>` 到 `<topic>/api`，不再通过 `/status` 返回 `effect` 或 `light` 字段。
+
+再看事件日志：
+
+```bash
+curl -s -H 'Authorization: Bearer <device-token>' \
+  'http://127.0.0.1:4318/api/devices/desk-light-01/events?limit=20&details=1'
+```
+
+如果 `/status` 有变化但 WLED 不亮，优先查：
+
+```text
+1. server 日志里是否有 [mqtt] device=desk-light-01 ...
+2. WLED MQTT 是否启用
+3. WLED Device Topic 是否正好是 wled/desk-light-01
+4. WLED 是否已经保存 1-4 号 preset
+5. MQTT broker 地址、端口、账号密码是否一致
+```
 
 ## 安装方式
 
@@ -275,7 +617,7 @@ curl -s -H 'Authorization: Bearer <device-token>' \
 | collector 脚本 | 留在本项目 `collector/<tool>/...` |
 | hooks 配置 | 合并到工具自己的全局配置文件 |
 | server 地址/token | 配在 collector 脚本顶部常量；也可用进程环境变量临时覆盖，但不要写进 Claude Code settings |
-| 状态结果 | collector POST 到 server；server 内存保存最新状态，设备通过 HTTP 查询 |
+| 状态结果 | collector POST 到 server；server 内存保存最新状态，并通过 MQTT 调用 WLED preset |
 
 不要把 `collector/` 目录复制到 `~/.claude`、`~/.codex` 或 `~/.gemini`。这些目录里只放配置。
 
@@ -554,72 +896,23 @@ Content-Type: application/json
 
 `:deviceId` 即 collector 配置里的 `DEVICE_ID`（每用户/每灯一个）。
 
-### 设备查询
+### 当前状态查询（调试 / 兼容）
 
 ```http
 GET /api/devices/:deviceId/status
 Authorization: Bearer <device-token>
 ```
 
-这是给 ESP32 用的轻量接口，默认不返回 `details`。响应示例：
+这是给 curl 调试和 Web 预览页使用的轻量接口，默认不返回 `details`。当前推荐的 WLED 方案不需要设备主动查询这个接口，server 会在状态变化时通过 MQTT 推送。响应示例：
 
 ```json
 {
   "state": "approval",
   "color": "red",
-  "effect": "fast_blink",
-  "light": {
-    "intent": "approval",
-    "primary": "#EF4444",
-    "secondary": "#F97316",
-    "brightness": 190,
-    "speed": 140,
-    "density": 4,
-    "priority": 90,
-    "ttlMs": 1200000
-  },
   "message": "Codex 需要审批",
   "source": "codex",
   "event": "PermissionRequest",
   "updatedAt": "2026-06-13 18:40:46"
-}
-```
-
-多显示设备读取同一个状态通道时，可以追加 `displayId` 或 `layout`：
-
-```http
-GET /api/devices/:deviceId/status?displayId=desk-ring-12
-GET /api/devices/:deviceId/status?displayId=desk-main&layout=matrix4x4
-Authorization: Bearer <device-token>
-```
-
-响应会额外带上 `display`：
-
-```json
-{
-  "state": "busy",
-  "color": "red",
-  "effect": "solid",
-  "light": {
-    "intent": "busy",
-    "primary": "#3B82F6",
-    "secondary": "#8B5CF6",
-    "brightness": 120,
-    "speed": 90,
-    "density": 3,
-    "priority": 30,
-    "ttlMs": 1200000
-  },
-  "display": {
-    "id": "desk-ring-12",
-    "layout": "ring12",
-    "pixels": 12,
-    "description": "12 pixel ring"
-  },
-  "message": "Codex 正在动手",
-  "source": "codex",
-  "event": "PreToolUse",
-  "updatedAt": "2026-06-15 14:30:00"
 }
 ```
 
@@ -654,75 +947,134 @@ Authorization: Bearer <device-token>
 GET /health
 ```
 
-## 显示设备与 AI 光效
+## WLED 设备与 AI 光效
 
-### 状态通道与显示设备
+### 状态通道与 WLED topic
 
-hooks 只负责更新一个统一状态通道，物理灯只是订阅这个通道的不同显示终端：
+hooks 只负责更新一个统一状态通道，WLED 设备通过 MQTT 订阅自己的 Device Topic：
 
 ```text
 collector -> POST /api/devices/workspace/events
 
-12 环形灯 -> GET /api/devices/workspace/status?displayId=desk-ring-12
-8x8 方阵 -> GET /api/devices/workspace/status?displayId=desk-matrix-8x8
-4x4 方阵 -> GET /api/devices/workspace/status?displayId=desk-matrix-4x4
-2x2 方阵 -> GET /api/devices/workspace/status?displayId=mini-2x2
-单个灯   -> GET /api/devices/workspace/status?displayId=single-dot
-6 位条形 -> GET /api/devices/workspace/status?displayId=bar-6
+server -> MQTT publish wled/workspace/api
+WLED   -> Device Topic 填 wled/workspace
 ```
 
-这里 `workspace` 是状态通道，同一用户、同一桌面、同一组 agent 可以共用一个 `deviceId`。`displayId` 是具体显示设备，设备端固件根据自己的灯型渲染。
+这里 `workspace` 是状态通道，同一用户、同一桌面、同一组 agent 可以共用一个 `deviceId`。如果不同用户或不同桌面需要隔离，就使用不同 `deviceId`，例如 `alice-light`、`bob-light`。
 
-服务端保留旧字段 `color/effect`，供简单红黄绿灯使用；新设备优先读取 `light` 和 `display`。
-
-### 支持的灯型
-
-| layout | 灯型 | 像素数 | 推荐用途 |
-| --- | --- | --- | --- |
-| `pixel1` | 单个灯 | 1 | 最小状态指示，靠亮度曲线和颜色过渡表现质感 |
-| `matrix2x2` | 2x2 方形 | 4 | 四象限脉冲、对角线呼吸、整体爆闪 |
-| `matrix4x4` | 4x4 方形 | 16 | 中心扩散、低分辨率等离子、边框能量场、数据雨 |
-| `matrix8x8` | 8x8 方形 | 64 | 主推荐显示形态，适合极光、数据雨、粒子、波纹、低分辨率 AI 核心 |
-| `ring12` | 12 环形 | 12 | 旋转能量环、粒子追逐、黑洞吸入、完成扫圈 |
-| `bar6` | 6 位条形 | 6 | 数据流、进度扫描、左右波、流星拖尾 |
-
-`layout` 可以显式传入，也可以通过常见 `displayId` 自动推断：
+服务端默认 `mqttTopic` 是 `wled/%s`，其中 `%s` 会替换为 `deviceId`：
 
 ```text
-desk-ring-12       -> ring12
-desk-matrix-8x8    -> matrix8x8
-desk-matrix-4x4    -> matrix4x4
-mini-2x2           -> matrix2x2
-single-dot         -> pixel1
-bar-6 / strip-6    -> bar6
+/api/devices/alice-light/events -> wled/alice-light/api
+/api/devices/bob-light/events   -> wled/bob-light/api
 ```
 
-### 光效字段
+每台 WLED 设备只订阅自己的 Device Topic，所以不会多用户互相打架。
 
-`light` 是服务端给设备端的视觉意图，不直接指定每颗灯珠颜色。设备端固件按自己的 `layout` 实现具体动画。
+### WLED MQTT 注意事项与自测
 
-| 字段 | 说明 |
+WLED 的 **Device Topic 不要带 `/api`**。这是最容易踩坑的地方。
+
+正确配置：
+
+```text
+WLED Device Topic: wled/desk-light-01
+server 发布 topic:   wled/desk-light-01/api
+```
+
+错误配置：
+
+```text
+WLED Device Topic: wled/desk-light-01/api
+```
+
+原因是 WLED 会基于 Device Topic 自动监听多个子 topic，包括 `<Device Topic>/api`。如果你把 Device Topic 填成 `wled/desk-light-01/api`，WLED 实际会去监听 `wled/desk-light-01/api/api`，而 server 发的是 `wled/desk-light-01/api`，两边就对不上。
+
+按当前项目默认配置：
+
+```json
+{
+  "mqttTopic": "wled/%s"
+}
+```
+
+当 `deviceId=desk-light-01` 时：
+
+```text
+server 自动发布到: wled/desk-light-01/api
+WLED Device Topic: wled/desk-light-01
+```
+
+所以不要把 `server/env.json` 里的 `mqttTopic` 改成 `wled/%s/api`，也不要在 WLED 的 Device Topic 里手动加 `/api`。
+
+WLED MQTT 配置保存后，页面如果提示 `Reboot required to apply changes`，必须重启 WLED 才会生效。
+
+自测方式：
+
+```text
+订阅 topic: wled/#
+发布 topic: wled/desk-light-01/api
+payload:   T=1&PL=1
+QoS:       0
+Retain:    false
+```
+
+如果 WLED 里已经保存了 Preset 1，灯应该立即切到 `Agent Idle`。再测试：
+
+```text
+T=1&PL=2
+T=1&PL=3
+T=1&PL=4
+```
+
+如果 MQTT 工具能看到消息但灯不变，按这个顺序查：
+
+| 检查项 | 正确值 |
 | --- | --- |
-| `intent` | 当前语义状态，如 `idle`、`thinking`、`busy`、`approval` |
-| `primary` | 主色，通常用于主体光流 |
-| `secondary` | 辅色，通常用于拖尾、背景辉光或对比层 |
-| `brightness` | 建议亮度，0-255，设备可按硬件限制再压低 |
-| `speed` | 建议动画速度，0-255 |
-| `density` | 粒子、亮点、扫描线密度 |
-| `priority` | 状态优先级，设备端可用它决定是否打断当前动画 |
-| `ttlMs` | 服务端状态 TTL，设备端可用它判断离线/过期降级 |
+| WLED Enable MQTT | 已勾选 |
+| WLED Broker / Port | 与 server 使用同一个 broker |
+| WLED Username / Password | 与 broker 鉴权一致 |
+| WLED Device Topic | `wled/desk-light-01`，不带 `/api` |
+| server `mqttTopic` | `wled/%s`，不带 `/api` |
+| 发布 topic | `wled/desk-light-01/api` |
+| payload | `T=1&PL=1` 这类 WLED HTTP API 指令 |
+| WLED preset | 已保存 1-4 号 preset |
+| WLED 配置变更后 | 已重启 |
 
-后续固件可以扩展更多字段：
+### 推荐灯型
 
-| 字段 | 用途 |
+| 灯型 | 像素数 | 推荐用途 |
+| --- | --- | --- |
+| 单个灯 | 1 | 最小状态指示，靠亮度曲线和颜色过渡表现质感 |
+| 2x2 方形 | 4 | 四象限脉冲、对角线呼吸、整体爆闪 |
+| 4x4 方形 | 16 | 中心扩散、低分辨率等离子、边框能量场、数据雨 |
+| 8x8 方形 | 64 | 主推荐显示形态，适合极光、数据雨、粒子、波纹、低分辨率 AI 核心 |
+| 12 环形 | 12 | 旋转能量环、粒子追逐、黑洞吸入、完成扫圈 |
+| 6 位条形 | 6 | 数据流、进度扫描、左右波、流星拖尾 |
+
+### WLED MQTT payload 与 preset
+
+当前服务端直接给 WLED 的 `<topic>/api` 发布 WLED HTTP API 指令串。`GET /status` 只保留 `state`、`color`、`message` 等调试字段，不再生成 `light`、`effect` 或 `display`。
+
+服务端只下发 preset 调用，不下发具体灯效参数。你需要在每台 WLED 设备上提前保存这些 preset：
+
+| state | MQTT topic | server payload | WLED preset ID | WLED preset 名称 |
+| --- | --- | --- | --- | --- |
+| `idle` | `wled/<deviceId>/api` | `T=1&PL=1` | 1 | `Agent Idle` |
+| `thinking` | `wled/<deviceId>/api` | `T=1&PL=2` | 2 | `Agent Thinking` |
+| `busy` | `wled/<deviceId>/api` | `T=1&PL=3` | 3 | `Agent Busy` |
+| `approval` | `wled/<deviceId>/api` | `T=1&PL=4` | 4 | `Agent Approval` |
+
+WLED 的具体效果编号、调色板、亮度、速度、矩阵布局都在 WLED UI 里调好并保存为 preset。服务端只维护 `state -> preset ID` 映射，位置在 `server/mqtt.go` 的 `wledPresetByState`。WLED 的 preset 名称不参与 MQTT 调用，但建议按上表命名，之后维护时一眼就能看懂。
+
+推荐中文备注名：
+
+| WLED preset 名称 | 中文备注 |
 | --- | --- |
-| `animation` | 指定动画算法，如 `quantum_drift`、`data_stream` |
-| `palette` | 指定调色板，如 `ai_nebula`、`ai_focus` |
-| `accent` | 点缀色，适合白色星点、红橙核心、紫色边缘光 |
-| `trail` | 拖尾长度或残影强度 |
-| `glow` | 背景辉光强度 |
-| `sparkle` | 星尘/粒子闪烁密度 |
-| `direction` | 环形/条形流动方向，如 `cw`、`ccw`、`left`、`right` |
+| `Agent Idle` | AI 空闲 / 极光待机 |
+| `Agent Thinking` | AI 思考 / 金色呼吸 |
+| `Agent Busy` | AI 执行 / 数据流 |
+| `Agent Approval` | AI 审批 / 红色提醒 |
 
 ### AI 风格动画
 
@@ -739,19 +1091,10 @@ bar-6 / strip-6    -> bar6
 | `error` | `red_singularity` | 深红收缩/爆闪 2-3 次，然后暗红余辉 | `#DC2626` + `#7F1D1D` + `#FCA5A5` |
 | `offline` | `cold_sleep` | 暗蓝灰单点慢闪，像休眠舱 | `#334155` + `#94A3B8` |
 
-### 8x8 方阵主光效
+### 8x8 方阵主光效建议
 
 8x8 WS2812 有 64 个像素，是当前最推荐作为主状态灯的形态。它比 4x4 更能表现流动和层次，又比 16x16 更省电、更容易供电和散热。建议加 2mm-3mm 乳白亚克力扩散板，灯珠到扩散面保持 8mm-15mm。
 
-8x8 固件建议把像素抽象成二维坐标：
-
-```text
-(0,0) ... (7,0)
-  .         .
-(0,7) ... (7,7)
-```
-
-如果你的灯板是蛇形走线，固件里只在 `xy(x, y)` 映射函数处理真实灯珠编号，动画代码永远按二维坐标写。
 
 | 状态 | 动画 | 8x8 表现 |
 | --- | --- | --- |
@@ -764,19 +1107,11 @@ bar-6 / strip-6    -> bar6
 | `error` | `red_singularity` | 全屏暗红收缩到中心，再红白短闪 2-3 次，随后暗红余辉逐渐熄灭 |
 | `offline` | `cold_sleep` | 只有左上或中心一点暗蓝灰慢闪，其余像素极低亮 |
 
-推荐实现技巧：
+使用 WLED 时，优先在 WLED UI 里调效果、调色板、亮度和速度，然后保存到固定 preset 编号。常态亮度建议 40-110，只有 `approval` 这类强提醒短时间提高亮度。
 
-| 技巧 | 说明 |
-| --- | --- |
-| `fadeToBlackBy` | 每帧整体衰减，形成自然拖尾 |
-| `beatsin8` / `sin8` | 做呼吸、波动、中心扩散 |
-| `inoise8` | 做极光、云雾、能量场 |
-| 调色板 | 把 `ai_nebula`、`ai_focus`、`ai_work`、`ai_alert` 做成固定 palette |
-| 低亮运行 | 常态亮度建议 40-110，只有 approval/error 短时间到 160-200 |
+### 不同灯型的 WLED 配置建议
 
-### 不同灯型的动画实现
-
-同一个 `intent` 在不同灯型上应该保持同一气质，但动画算法可以完全不同。
+同一个状态在不同灯型上应该保持同一气质，但具体效果可以在每台 WLED 设备里分别调好。server 对所有设备都调用同一组 preset 编号：`idle=1`、`thinking=2`、`busy=3`、`approval=4`。因此 8x8、12 环、6 位条形可以各自把 1-4 号 preset 做成最适合自己形态的动画。
 
 | intent | `pixel1` | `matrix2x2` | `matrix4x4` | `matrix8x8` | `bar6` | `ring12` |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -787,7 +1122,7 @@ bar-6 / strip-6    -> bar6
 | `done` | 绿色柔闪一次 | 由暗到亮再回落 | 中心绿色扩散 | 绿色中心 bloom + 青色边缘扫过 | 从左到右扫过 | 绿色扫一圈 |
 | `offline` | 暗蓝灰慢闪 | 单角慢闪 | 单点慢闪 | 单点暗蓝灰休眠闪烁 | 第一颗慢闪 | 单点慢闪 |
 
-设备端固件建议用 FastLED / Adafruit NeoPixel 实现。FastLED 更适合做调色板、噪声、拖尾和多层动画；Adafruit NeoPixel 更简单稳定，适合先把硬件跑通。
+当前推荐不再维护自定义设备端动画代码，优先使用 WLED 内置效果和 preset。
 
 ## 状态映射
 
@@ -967,8 +1302,12 @@ server 端可选环境变量：
 | --- | --- | --- |
 | `AGENT_LIGHT_PORT` | `4318` | 监听端口 |
 | `AGENT_LIGHT_HOST` | `127.0.0.1` | 监听地址；走反代保持默认，要让服务直接对外才设 `0.0.0.0` |
-| `AGENT_LIGHT_COLLECTOR_TOKEN` | 随机生成 | collector 上报鉴权；不指定则每次启动生成新 token |
-| `AGENT_LIGHT_DEVICE_TOKEN` | 随机生成 | 设备查询鉴权；不指定则每次启动生成新 token |
+| `AGENT_LIGHT_COLLECTOR_TOKEN` | `env.json` 或首次随机生成 | collector 上报鉴权；最终值会写回 `server/env.json` |
+| `AGENT_LIGHT_DEVICE_TOKEN` | `env.json` 或首次随机生成 | HTTP 查询鉴权，主要用于 curl 调试和 Web 预览页；最终值会写回 `server/env.json` |
+| `AGENT_LIGHT_MQTT_BROKER` | 空 | MQTT broker 地址；留空则不推送 WLED |
+| `AGENT_LIGHT_MQTT_TOPIC` | `wled/%s` | WLED topic 模板，`%s` 替换为 `deviceId` |
+| `AGENT_LIGHT_MQTT_USER` | 空 | MQTT 用户名 |
+| `AGENT_LIGHT_MQTT_PASS` | 空 | MQTT 密码 |
 | `AGENT_LIGHT_IDLE_TTL_MS` | `1200000` | 超时未更新回落 idle |
 | `AGENT_LIGHT_MAX_RECENT_EVENTS` | `100` | 每个 deviceId 独立保留的最近事件数，供 `/events` 调试 |
 
@@ -1026,6 +1365,8 @@ curl -s -H 'Authorization: Bearer <device-token>' \
 | 现象 | 排查 |
 | --- | --- |
 | 灯一直不变 | server 起了吗？`curl http://127.0.0.1:4318/health` |
+| WLED 灯不变 | 检查 `mqttBroker` 是否配置；WLED MQTT 是否启用；WLED Device Topic 是否等于 `wled/<deviceId>`；server 日志里是否有 `[mqtt] device=...` |
+| 多用户设备串灯 | 服务端 `mqttTopic` 应该是 `wled/%s`；每个 WLED Device Topic 应该分别是 `wled/alice-light`、`wled/bob-light` |
 | server / 远程接收服务没开 | 不影响 Claude / Codex / Antigravity 正常使用；collector 上报失败会吞掉并正常退出，只是灯不更新 |
 | 工具感觉变慢 | collector 默认最多等 `AGENT_LIGHT_POST_TIMEOUT_MS=800ms`；服务长期不开可调低到 `200` |
 | 回合结束灯不转绿 | 检查是否接了 `SubagentStop`；Claude 默认不要接它；也可等 TTL 或手动 POST idle |
@@ -1034,7 +1375,7 @@ curl -s -H 'Authorization: Bearer <device-token>' \
 | Claude Code hooks 没生效 | `jq . ~/.claude/settings.json` 检查 JSON；Claude 通常热加载 |
 | Antigravity hooks 没生效 | 检查 `~/.gemini/config/hooks.json` 结构是否是命名组，不是顶层 `hooks` |
 | 端口被占 | `lsof -nP -iTCP:4318` 找 PID，或换 `AGENT_LIGHT_PORT` |
-| token 要改 | server 和 collector 的 `AGENT_LIGHT_COLLECTOR_TOKEN` 要一致；设备用 `AGENT_LIGHT_DEVICE_TOKEN` |
+| token 要改 | server 和 collector 的 `AGENT_LIGHT_COLLECTOR_TOKEN` 要一致；`AGENT_LIGHT_DEVICE_TOKEN` 只影响 HTTP 查询调试 |
 
 手动置空闲：
 
@@ -1059,19 +1400,20 @@ collector/antigravity/antigravity-hook.js
 server/main.go
 server/daemon.go
 server/build.sh
-firmware/  (ESP32-C3，见 firmware/README.md)
+firmware/README.md  (WLED 烧录与 MQTT 配置说明)
 ```
 
 当前 server 是 Go 版：
 
 ```text
 Go 标准库 net/http
-内存存储（不落盘）
+状态和最近事件保存在内存里（不落盘）；`server/env.json` 只保存 token、端口、MQTT 等运行配置
 按 device-id 分区（默认示例 desk-light-01）
 Bearer token 鉴权
 每份 device：last-write-wins + TTL
 支持 agent-light-server server start|stop|restart|status 后台运行
 支持 darwin-arm64 / linux-amd64 编译
+支持 MQTT 推送 WLED `<topic>/api`
 ```
 
 ### 后续 server
@@ -1085,18 +1427,19 @@ SQLite 或 Redis
 历史事件查询
 ```
 
-### firmware（已实现）
+### 设备端
 
-ESP32-C3 SuperMini 固件，PlatformIO + Arduino，代码在 [`firmware/`](firmware/)。职责：
+当前推荐设备端使用 WLED：
 
 ```text
-连接 Wi-Fi
-定时 GET /api/devices/:id/status（HTTP）
-按 color/effect 控制红黄绿 LED（solid / breathing / fast_blink）
-网络失败 30s → 全灭（掉线指示）
+刷 WLED 固件
+配置 Wi-Fi 和 MQTT broker
+每台设备设置自己的 MQTT Device Topic，例如 wled/desk-light-01
+server 状态变化时发布到 wled/desk-light-01/api
+WLED 根据收到的 HTTP API 指令切换颜色和效果
 ```
 
-固件不理解三家 hooks，只理解 server 返回的统一状态。接线/烧录见 [`firmware/README.md`](firmware/README.md)。
+[`firmware/`](firmware/) 目录不再包含自定义 PlatformIO 固件，只保留 WLED 烧录和 MQTT topic 配置说明。
 
 ### 可选能力
 
@@ -1116,3 +1459,7 @@ ESP32-C3 SuperMini 固件，PlatformIO + Arduino，代码在 [`firmware/`](firmw
 - Codex hooks: https://developers.openai.com/codex/hooks
 - Claude Code hooks: https://code.claude.com/docs/en/hooks
 - Antigravity hooks: https://antigravity.google/docs/hooks
+
+## 许可证
+
+本项目使用 [MIT License](LICENSE)。

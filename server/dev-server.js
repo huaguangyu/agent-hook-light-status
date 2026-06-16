@@ -9,11 +9,11 @@ const DEVICE_TOKEN = process.env.AGENT_LIGHT_DEVICE_TOKEN || "dev-device-token";
 const IDLE_TTL_MS = Number(process.env.AGENT_LIGHT_IDLE_TTL_MS || 20 * 60 * 1000);
 const MAX_RECENT_EVENTS = Number(process.env.AGENT_LIGHT_MAX_RECENT_EVENTS || 100);
 
-const LIGHT_EFFECTS = {
-  idle: { color: "green", effect: "solid" },
-  thinking: { color: "yellow", effect: "breathing" },
-  busy: { color: "red", effect: "solid" },
-  approval: { color: "red", effect: "fast_blink" }
+const COLORS_BY_STATE = {
+  idle: "green",
+  thinking: "yellow",
+  busy: "red",
+  approval: "red"
 };
 
 const VALID_STATES = new Set(["idle", "thinking", "busy", "approval"]);
@@ -44,8 +44,7 @@ function resolveStatus(deviceState, options = {}) {
   if (expired) {
     return {
       state: "idle",
-      color: LIGHT_EFFECTS.idle.color,
-      effect: LIGHT_EFFECTS.idle.effect,
+      color: COLORS_BY_STATE.idle,
       message: deviceState ? "空闲（超时未更新）" : "空闲",
       source: deviceState ? deviceState.source || "unknown" : null,
       event: deviceState ? deviceState.event || null : null,
@@ -53,11 +52,9 @@ function resolveStatus(deviceState, options = {}) {
     };
   }
 
-  const light = LIGHT_EFFECTS[deviceState.state] || LIGHT_EFFECTS.idle;
   return publicStatus({
     state: deviceState.state,
-    color: light.color,
-    effect: light.effect,
+    color: COLORS_BY_STATE[deviceState.state] || COLORS_BY_STATE.idle,
     message: deviceState.message || "",
     source: deviceState.source || "unknown",
     event: deviceState.event || null,

@@ -4,6 +4,36 @@
 
 ---
 
+第一次部署请先完成根目录 [README.md](../../README.md) 的“新手快速部署”：启动 server、配置 WLED、确认 MQTT 自测可用。然后再配置本 collector。
+
+## 先改 collector 脚本顶部配置
+
+打开：
+
+```text
+collector/antigravity/antigravity-hook.js
+```
+
+把顶部三项改成你的实际值：
+
+```js
+const DEVICE_ID = "desk-light-01";
+const SERVER_URL = "http://127.0.0.1:4318";
+const COLLECTOR_TOKEN = "填 server/env.json 里的 collectorToken";
+```
+
+对应关系：
+
+```text
+DEVICE_ID=desk-light-01
+WLED Device Topic=wled/desk-light-01
+server 发布 topic=wled/desk-light-01/api
+```
+
+远程部署时，把 `SERVER_URL` 改成你的 server 地址。
+
+---
+
 ## 配置文件路径
 
 Antigravity 支持以下两种级别的 hooks 配置：

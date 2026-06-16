@@ -23,6 +23,8 @@ type RuntimeState struct {
 	DeviceTokenGenerated    bool   `json:"deviceTokenGenerated"`
 	IdleTTLMS               int64  `json:"idleTtlMs"`
 	MaxRecentEvents         int    `json:"maxRecentEvents"`
+	MqttBroker              string `json:"mqttBroker,omitempty"`
+	MqttTopic               string `json:"mqttTopic,omitempty"`
 	StartedAt               string `json:"startedAt"`
 }
 
@@ -161,6 +163,7 @@ func serverStatus() {
 			fmt.Printf("Device token: %s%s\n", state.DeviceToken, generatedLabel(state.DeviceTokenGenerated))
 			fmt.Printf("Idle TTL: %.0fs\n", float64(state.IdleTTLMS)/1000)
 			fmt.Printf("Max recent events per deviceId: %d\n", state.MaxRecentEvents)
+			printMqttConfig(state.MqttBroker, state.MqttTopic)
 			fmt.Printf("Started at: %s\n", state.StartedAt)
 		}
 		return
@@ -175,7 +178,7 @@ func serverStatus() {
 }
 
 func daemonArgs(cfg Config) []string {
-	return []string{
+	args := []string{
 		"--daemon",
 		"--host", cfg.Host,
 		"--port", strconv.Itoa(cfg.Port),
@@ -184,6 +187,23 @@ func daemonArgs(cfg Config) []string {
 		"--idle-ttl-ms", strconv.FormatInt(cfg.IdleTTL.Milliseconds(), 10),
 		"--max-recent-events", strconv.Itoa(cfg.MaxRecent),
 	}
+	// MQTT 配置透传给 daemon 子进程。broker 为空就不传，子进程会自己读 env.json。
+	if cfg.Mqtt.Broker != "" {
+		args = append(args,
+			"--mqtt-broker", cfg.Mqtt.Broker,
+			"--mqtt-topic", cfg.Mqtt.Topic,
+		)
+		if cfg.Mqtt.ClientID != "" {
+			args = append(args, "--mqtt-client-id", cfg.Mqtt.ClientID)
+		}
+		if cfg.Mqtt.User != "" {
+			args = append(args, "--mqtt-user", cfg.Mqtt.User)
+		}
+		if cfg.Mqtt.Pass != "" {
+			args = append(args, "--mqtt-pass", cfg.Mqtt.Pass)
+		}
+	}
+	return args
 }
 
 func writeRuntimeState(pid int, cfg Config) error {
@@ -198,6 +218,8 @@ func writeRuntimeState(pid int, cfg Config) error {
 		DeviceTokenGenerated:    cfg.DeviceTokenGenerated,
 		IdleTTLMS:               cfg.IdleTTL.Milliseconds(),
 		MaxRecentEvents:         cfg.MaxRecent,
+		MqttBroker:              cfg.Mqtt.Broker,
+		MqttTopic:               cfg.Mqtt.Topic,
 		StartedAt:               formatBeijingTime(time.Now()),
 	}
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -222,4 +244,17 @@ func printRuntimeConfig(cfg Config) {
 	fmt.Printf("Collector token: %s%s\n", cfg.CollectorToken, generatedLabel(cfg.CollectorTokenGenerated))
 	fmt.Printf("Device token: %s%s\n", cfg.DeviceToken, generatedLabel(cfg.DeviceTokenGenerated))
 	fmt.Printf("Max recent events per deviceId: %d\n", cfg.MaxRecent)
+	printMqttConfig(cfg.Mqtt.Broker, cfg.Mqtt.Topic)
+}
+
+func printMqttConfig(broker, topic string) {
+	if broker != "" {
+		if strings.Contains(topic, "%s") {
+			fmt.Printf("MQTT broker: %s (topic 模板: %s -> <deviceId>/api)\n", broker, topic)
+		} else {
+			fmt.Printf("MQTT broker: %s (topic: %s/api，共用单设备 topic)\n", broker, topic)
+		}
+	} else {
+		fmt.Println("MQTT: 未配置（WLED 推送已禁用）")
+	}
 }

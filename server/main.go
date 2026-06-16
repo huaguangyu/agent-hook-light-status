@@ -39,89 +39,11 @@ var validStates = map[string]bool{
 	"approval": true,
 }
 
-var lightEffects = map[string]LightEffect{
-	"idle":     {Color: "green", Effect: "solid"},
-	"thinking": {Color: "yellow", Effect: "breathing"},
-	"busy":     {Color: "red", Effect: "solid"},
-	"approval": {Color: "red", Effect: "fast_blink"},
-}
-
-var lightIntents = map[string]LightIntent{
-	"idle": {
-		Intent:     "idle",
-		Primary:    "#22C55E",
-		Secondary:  "#14B8A6",
-		Brightness: 45,
-		Speed:      25,
-		Density:    1,
-		Priority:   0,
-	},
-	"thinking": {
-		Intent:     "thinking",
-		Primary:    "#FACC15",
-		Secondary:  "#38BDF8",
-		Brightness: 95,
-		Speed:      55,
-		Density:    1,
-		Priority:   20,
-	},
-	"busy": {
-		Intent:     "busy",
-		Primary:    "#3B82F6",
-		Secondary:  "#8B5CF6",
-		Brightness: 120,
-		Speed:      90,
-		Density:    3,
-		Priority:   30,
-	},
-	"approval": {
-		Intent:     "approval",
-		Primary:    "#EF4444",
-		Secondary:  "#F97316",
-		Brightness: 190,
-		Speed:      140,
-		Density:    4,
-		Priority:   90,
-	},
-}
-
-var displayLayouts = map[string]DisplayProfile{
-	"pixel1": {
-		Layout:      "pixel1",
-		Pixels:      1,
-		Description: "single status pixel",
-	},
-	"matrix2x2": {
-		Layout:      "matrix2x2",
-		Pixels:      4,
-		Width:       2,
-		Height:      2,
-		Description: "2x2 square matrix",
-	},
-	"matrix4x4": {
-		Layout:      "matrix4x4",
-		Pixels:      16,
-		Width:       4,
-		Height:      4,
-		Description: "4x4 square matrix",
-	},
-	"matrix8x8": {
-		Layout:      "matrix8x8",
-		Pixels:      64,
-		Width:       8,
-		Height:      8,
-		Description: "8x8 square matrix",
-	},
-	"ring12": {
-		Layout:      "ring12",
-		Pixels:      12,
-		Description: "12 pixel ring",
-	},
-	"bar6": {
-		Layout:      "bar6",
-		Pixels:      6,
-		Description: "6 pixel bar",
-	},
+var colorsByState = map[string]string{
+	"idle":     "green",
+	"thinking": "yellow",
+	"busy":     "red",
+	"approval": "red",
 }
 
 type Config struct {
@@ -134,6 +56,7 @@ type Config struct {
 	DeviceTokenGenerated    bool
 	IdleTTL                 time.Duration
 	MaxRecent               int
+	Mqtt                    MqttConfig
 }
 
 type Server struct {
@@ -141,31 +64,7 @@ type Server struct {
 	mu           sync.RWMutex
 	devices      map[string]DeviceState
 	recentEvents map[string][]RecentEvent
-}
-
-type LightEffect struct {
-	Color  string
-	Effect string
-}
-
-type LightIntent struct {
-	Intent     string `json:"intent"`
-	Primary    string `json:"primary"`
-	Secondary  string `json:"secondary"`
-	Brightness int    `json:"brightness"`
-	Speed      int    `json:"speed"`
-	Density    int    `json:"density"`
-	Priority   int    `json:"priority"`
-	TTLMS      int64  `json:"ttlMs"`
-}
-
-type DisplayProfile struct {
-	ID          string `json:"id,omitempty"`
-	Layout      string `json:"layout"`
-	Pixels      int    `json:"pixels"`
-	Width       int    `json:"width,omitempty"`
-	Height      int    `json:"height,omitempty"`
-	Description string `json:"description,omitempty"`
+	mqtt         *MqttPublisher
 }
 
 type IncomingEvent struct {
@@ -199,9 +98,6 @@ type RecentEvent struct {
 type StatusResponse struct {
 	State     string          `json:"state"`
 	Color     string          `json:"color"`
-	Effect    string          `json:"effect"`
-	Light     LightIntent     `json:"light"`
-	Display   *DisplayProfile `json:"display,omitempty"`
 	Message   string          `json:"message"`
 	Source    *string         `json:"source"`
 	Event     *string         `json:"event"`
@@ -285,10 +181,19 @@ func printHelp() {
 环境变量:
   AGENT_LIGHT_PORT              监听端口，默认 4318
   AGENT_LIGHT_HOST              监听地址，默认 127.0.0.1
-  AGENT_LIGHT_COLLECTOR_TOKEN   collector 上报 token；不指定则每次启动随机生成
-  AGENT_LIGHT_DEVICE_TOKEN      设备查询 token；不指定则每次启动随机生成
+  AGENT_LIGHT_COLLECTOR_TOKEN   collector 上报 token；最终值会写入 env.json
+  AGENT_LIGHT_DEVICE_TOKEN      设备查询 token；最终值会写入 env.json
   AGENT_LIGHT_IDLE_TTL_MS       超时回落 idle 的毫秒数
   AGENT_LIGHT_MAX_RECENT_EVENTS 每个 device 保留的最近事件数量
+  AGENT_LIGHT_MQTT_BROKER       MQTT broker 地址（留空则不启用 WLED 推送），例如 tcp://192.168.1.10:1883
+  AGENT_LIGHT_MQTT_TOPIC        WLED topic 模板，默认 wled/%%s，%%s 会替换为 deviceId，实际发送到 <topic>/api
+  AGENT_LIGHT_MQTT_USER         MQTT 用户名（可选）
+  AGENT_LIGHT_MQTT_PASS         MQTT 密码（可选）
+
+配置文件（推荐，省去每次输入 token）:
+  运行目录下的 env.json。首次启动若不存在会自动创建真实配置并写入随机 token。
+  里面可写 collectorToken / deviceToken / host / port / mqttBroker / mqttTopic 等。
+  优先级：命令行 flag > env.json > 环境变量 > 默认/随机。
 
 命令参数:
   --host <host>
@@ -297,6 +202,10 @@ func printHelp() {
   --device-token <token>
   --idle-ttl-ms <ms>
   --max-recent-events <n>
+  --mqtt-broker <url>
+  --mqtt-topic <topic>
+  --mqtt-user <user>
+  --mqtt-pass <pass>
 `, appName)
 }
 
@@ -310,7 +219,12 @@ func runHTTPServer() {
 		cfg:          cfg,
 		devices:      make(map[string]DeviceState),
 		recentEvents: make(map[string][]RecentEvent),
+		mqtt:         NewMqttPublisher(cfg.Mqtt),
 	}
+
+	// 后台扫描：检测到状态超时回落 idle 时，给 WLED 发一次 idle，
+	// 这样 agent 停止上报后灯会自动回到"空闲"灯效，而不需要 ESP32 来轮询触发。
+	go s.watchOffline()
 
 	httpServer := &http.Server{
 		Addr:    cfg.Addr,
@@ -332,6 +246,7 @@ func runHTTPServer() {
 	select {
 	case sig := <-sigCh:
 		log.Printf("received signal %s, shutting down", sig)
+		s.mqtt.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := httpServer.Shutdown(ctx); err != nil {
@@ -340,23 +255,55 @@ func runHTTPServer() {
 		}
 	case err := <-errCh:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			s.mqtt.Close()
 			log.Fatal(err)
 		}
 	}
 }
 
 func loadConfig() Config {
-	port := intValue("port", "AGENT_LIGHT_PORT", defaultPort)
-	host := stringValue("host", "AGENT_LIGHT_HOST", defaultHost)
-	collectorToken, collectorGenerated := tokenValue("collector-token", "AGENT_LIGHT_COLLECTOR_TOKEN")
-	deviceToken, deviceGenerated := tokenValue("device-token", "AGENT_LIGHT_DEVICE_TOKEN")
-	idleTTL := time.Duration(int64Value("idle-ttl-ms", "AGENT_LIGHT_IDLE_TTL_MS", int64(defaultIdleTTL/time.Millisecond))) * time.Millisecond
-	maxRecent := intValue("max-recent-events", "AGENT_LIGHT_MAX_RECENT_EVENTS", defaultMaxEvents)
+	// env.json 在运行目录下。优先级：flag > env.json > 环境变量 > 默认/随机。
+	// 解析完成后会把最终配置写回 env.json，首次启动的随机 token 也会落盘。
+	envFile := loadEnvFile()
+
+	port := resolveInt("port", "AGENT_LIGHT_PORT", envFile.Port, defaultPort)
+	host := resolveString("host", "AGENT_LIGHT_HOST", envFile.Host, os.Getenv("AGENT_LIGHT_HOST"))
+	if host == "" {
+		host = defaultHost
+	}
+
+	// token 解析：flag > env.json > 环境变量 > 随机生成
+	collectorToken, collectorGenerated := resolveToken(
+		cliFlags["collector-token"],              // 1. flag
+		envFile.CollectorToken,                   // 2. env.json
+		os.Getenv("AGENT_LIGHT_COLLECTOR_TOKEN"), // 3. env
+	)
+	deviceToken, deviceGenerated := resolveToken(
+		cliFlags["device-token"],
+		envFile.DeviceToken,
+		os.Getenv("AGENT_LIGHT_DEVICE_TOKEN"),
+	)
+
+	idleTTLMS := resolveInt64("idle-ttl-ms", "AGENT_LIGHT_IDLE_TTL_MS", envFile.IdleTTLMS, int64(defaultIdleTTL/time.Millisecond))
+	idleTTL := time.Duration(idleTTLMS) * time.Millisecond
+	maxRecent := resolveInt("max-recent-events", "AGENT_LIGHT_MAX_RECENT_EVENTS", envFile.MaxRecent, defaultMaxEvents)
 	if maxRecent < 1 {
 		maxRecent = defaultMaxEvents
 	}
 
-	return Config{
+	// MQTT 配置：flag > env.json > 环境变量。broker 为空则不启用。
+	mqttCfg := MqttConfig{
+		Broker:   resolveString("mqtt-broker", "AGENT_LIGHT_MQTT_BROKER", envFile.MqttBroker, os.Getenv("AGENT_LIGHT_MQTT_BROKER")),
+		ClientID: resolveString("mqtt-client-id", "AGENT_LIGHT_MQTT_CLIENT_ID", envFile.MqttClientID, os.Getenv("AGENT_LIGHT_MQTT_CLIENT_ID")),
+		User:     resolveString("mqtt-user", "AGENT_LIGHT_MQTT_USER", envFile.MqttUser, os.Getenv("AGENT_LIGHT_MQTT_USER")),
+		Pass:     resolveString("mqtt-pass", "AGENT_LIGHT_MQTT_PASS", envFile.MqttPass, os.Getenv("AGENT_LIGHT_MQTT_PASS")),
+		Topic:    resolveString("mqtt-topic", "AGENT_LIGHT_MQTT_TOPIC", envFile.MqttTopic, os.Getenv("AGENT_LIGHT_MQTT_TOPIC")),
+	}
+	if mqttCfg.Topic == "" {
+		mqttCfg.Topic = defaultMqttTopic
+	}
+
+	cfg := Config{
 		Host:                    host,
 		Port:                    port,
 		Addr:                    fmt.Sprintf("%s:%d", host, port),
@@ -366,7 +313,39 @@ func loadConfig() Config {
 		DeviceTokenGenerated:    deviceGenerated,
 		IdleTTL:                 idleTTL,
 		MaxRecent:               maxRecent,
+		Mqtt:                    mqttCfg,
 	}
+	persistEnvFile(cfg)
+	return cfg
+}
+
+// resolveToken 按 flag > env.json > 环境变量 > 随机生成 的顺序解析 token。
+// env.json 里的占位符（"请替换..."）会被当作空值处理，触发随机生成。
+func resolveToken(flagVal, fileVal, envVal string) (string, bool) {
+	if isFilledToken(flagVal) {
+		return flagVal, false
+	}
+	if isFilledToken(fileVal) {
+		return fileVal, false
+	}
+	if isFilledToken(envVal) {
+		return envVal, false
+	}
+	return randomToken(), true
+}
+
+// isFilledToken 判断 token 值是否是"已填写"的（非空、非占位符）。
+// env.json 模板里的中文占位符不算已填写。
+func isFilledToken(v string) bool {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return false
+	}
+	// 排除模板占位符
+	if strings.Contains(v, "请替换") || strings.HasPrefix(v, "replace-") || strings.HasPrefix(v, "your-") {
+		return false
+	}
+	return true
 }
 
 func appBaseDir() string {
@@ -447,12 +426,51 @@ func (s *Server) handlePostEvent(w http.ResponseWriter, r *http.Request, deviceI
 	}
 
 	s.mu.Lock()
+	prevState := s.devices[deviceID].State
 	s.devices[deviceID] = state
 	s.rememberEventLocked(deviceID, state, updatedAt, updatedAtMs)
-	status := s.resolveStatusLocked(&state, false, nil)
+	status := s.resolveStatusLocked(&state, false)
+	stateChanged := prevState != state.State
 	s.mu.Unlock()
 
+	// 状态变化时推给 WLED（在锁外发，避免持锁做网络 IO）。
+	if stateChanged {
+		s.mqtt.PublishState(deviceID, state.State)
+	}
+
 	sendJSON(w, http.StatusOK, PostEventResponse{OK: true, DeviceID: deviceID, Status: status})
+}
+
+// watchOffline 周期扫描所有 device，超时（IdleTTL）回落 idle 的发一次 idle 给 WLED。
+// 让 agent 长时间不活动后，灯自动回到空闲灯效。
+// 没配置 MQTT 时 PublishState 是 no-op，这个 goroutine 仍然空转但开销极小。
+func (s *Server) watchOffline() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now().UnixMilli()
+		ttl := s.cfg.IdleTTL.Milliseconds()
+
+		// 用写锁扫描：把"超时且非 idle"的设备改回 idle，并收集需要通知的。
+		var toNotify []string
+		s.mu.Lock()
+		for id, st := range s.devices {
+			if st.UpdatedAtMs == 0 {
+				continue
+			}
+			if now-st.UpdatedAtMs > ttl && st.State != "idle" {
+				st.State = "idle"
+				s.devices[id] = st
+				toNotify = append(toNotify, id)
+			}
+		}
+		s.mu.Unlock()
+
+		// 在锁外逐个设备发 MQTT，避免持锁做网络 IO；每个设备发自己的 topic。
+		for _, id := range toNotify {
+			s.mqtt.PublishState(id, "idle")
+		}
+	}
 }
 
 func (s *Server) handleGetStatus(w http.ResponseWriter, r *http.Request, deviceID string) {
@@ -462,14 +480,13 @@ func (s *Server) handleGetStatus(w http.ResponseWriter, r *http.Request, deviceI
 	}
 
 	includeDetails := r.URL.Query().Get("details") == "1"
-	display := displayFromQuery(r.URL.Query())
 	s.mu.RLock()
 	state, ok := s.devices[deviceID]
 	var statePtr *DeviceState
 	if ok {
 		statePtr = &state
 	}
-	status := s.resolveStatusLocked(statePtr, includeDetails, display)
+	status := s.resolveStatusLocked(statePtr, includeDetails)
 	s.mu.RUnlock()
 
 	sendJSON(w, http.StatusOK, status)
@@ -518,77 +535,7 @@ func (s *Server) rememberEventLocked(deviceID string, state DeviceState, receive
 	s.recentEvents[deviceID] = events
 }
 
-func lightIntentForState(state string, ttl time.Duration) LightIntent {
-	intent, ok := lightIntents[state]
-	if !ok {
-		intent = lightIntents["idle"]
-	}
-	intent.TTLMS = ttl.Milliseconds()
-	return intent
-}
-
-func displayFromQuery(values url.Values) *DisplayProfile {
-	displayID := strings.TrimSpace(values.Get("displayId"))
-	layout := normalizeLayout(values.Get("layout"))
-	if layout == "" {
-		layout = inferLayout(displayID)
-	}
-	if layout == "" {
-		return nil
-	}
-
-	profile, ok := displayLayouts[layout]
-	if !ok {
-		return nil
-	}
-	profile.ID = displayID
-	return &profile
-}
-
-func normalizeLayout(layout string) string {
-	value := strings.ToLower(strings.TrimSpace(layout))
-	value = strings.ReplaceAll(value, "-", "")
-	value = strings.ReplaceAll(value, "_", "")
-	switch value {
-	case "pixel1", "single", "dot", "one":
-		return "pixel1"
-	case "matrix2x2", "2x2", "square2x2":
-		return "matrix2x2"
-	case "matrix4x4", "4x4", "square4x4":
-		return "matrix4x4"
-	case "matrix8x8", "8x8", "square8x8":
-		return "matrix8x8"
-	case "ring12", "12ring", "circle12":
-		return "ring12"
-	case "bar6", "6bar", "strip6":
-		return "bar6"
-	default:
-		return ""
-	}
-}
-
-func inferLayout(displayID string) string {
-	value := strings.ToLower(displayID)
-	compact := strings.NewReplacer("-", "", "_", "", " ", "").Replace(value)
-	switch {
-	case strings.Contains(value, "8x8"), strings.Contains(compact, "matrix8"):
-		return "matrix8x8"
-	case strings.Contains(value, "4x4"), strings.Contains(compact, "matrix4"):
-		return "matrix4x4"
-	case strings.Contains(value, "2x2"), strings.Contains(compact, "matrix2"):
-		return "matrix2x2"
-	case strings.Contains(compact, "ring12"), strings.Contains(compact, "12ring"), strings.Contains(compact, "circle12"):
-		return "ring12"
-	case strings.Contains(compact, "bar6"), strings.Contains(compact, "6bar"), strings.Contains(compact, "strip6"):
-		return "bar6"
-	case strings.Contains(compact, "single"), strings.Contains(compact, "pixel1"), strings.Contains(compact, "dot"):
-		return "pixel1"
-	default:
-		return ""
-	}
-}
-
-func (s *Server) resolveStatusLocked(deviceState *DeviceState, includeDetails bool, display *DisplayProfile) StatusResponse {
+func (s *Server) resolveStatusLocked(deviceState *DeviceState, includeDetails bool) StatusResponse {
 	now := time.Now()
 	expired := deviceState == nil || deviceState.UpdatedAtMs == 0 || now.UnixMilli()-deviceState.UpdatedAtMs > s.cfg.IdleTTL.Milliseconds()
 	if expired {
@@ -607,14 +554,9 @@ func (s *Server) resolveStatusLocked(deviceState *DeviceState, includeDetails bo
 			updatedAt = deviceState.UpdatedAt
 		}
 
-		light := lightEffects["idle"]
-		intent := lightIntentForState("idle", s.cfg.IdleTTL)
 		return StatusResponse{
 			State:     "idle",
-			Color:     light.Color,
-			Effect:    light.Effect,
-			Light:     intent,
-			Display:   display,
+			Color:     colorForState("idle"),
 			Message:   message,
 			Source:    source,
 			Event:     event,
@@ -622,11 +564,6 @@ func (s *Server) resolveStatusLocked(deviceState *DeviceState, includeDetails bo
 		}
 	}
 
-	light, ok := lightEffects[deviceState.State]
-	if !ok {
-		light = lightEffects["idle"]
-	}
-	intent := lightIntentForState(deviceState.State, s.cfg.IdleTTL)
 	source := deviceState.Source
 	if source == "" {
 		source = "unknown"
@@ -634,10 +571,7 @@ func (s *Server) resolveStatusLocked(deviceState *DeviceState, includeDetails bo
 
 	status := StatusResponse{
 		State:     deviceState.State,
-		Color:     light.Color,
-		Effect:    light.Effect,
-		Light:     intent,
-		Display:   display,
+		Color:     colorForState(deviceState.State),
 		Message:   deviceState.Message,
 		Source:    &source,
 		Event:     deviceState.Event,
@@ -647,6 +581,14 @@ func (s *Server) resolveStatusLocked(deviceState *DeviceState, includeDetails bo
 		status.Details = nullIfEmpty(deviceState.Details)
 	}
 	return status
+}
+
+func colorForState(state string) string {
+	color, ok := colorsByState[state]
+	if !ok {
+		return colorsByState["idle"]
+	}
+	return color
 }
 
 func parseDevicePath(path string) (string, string, bool) {
@@ -736,6 +678,11 @@ func parseCLI(args []string) ([]string, map[string]string, error) {
 		"device-token":      true,
 		"idle-ttl-ms":       true,
 		"max-recent-events": true,
+		"mqtt-broker":       true,
+		"mqtt-client-id":    true,
+		"mqtt-user":         true,
+		"mqtt-pass":         true,
+		"mqtt-topic":        true,
 	}
 
 	for i := 0; i < len(args); i++ {
@@ -799,16 +746,6 @@ func int64Value(flagName, envKey string, fallback int64) int64 {
 		return fallback
 	}
 	return envInt64(envKey, fallback)
-}
-
-func tokenValue(flagName, envKey string) (string, bool) {
-	if value := strings.TrimSpace(cliFlags[flagName]); value != "" {
-		return value, false
-	}
-	if value := strings.TrimSpace(os.Getenv(envKey)); value != "" {
-		return value, false
-	}
-	return randomToken(), true
 }
 
 func randomToken() string {
