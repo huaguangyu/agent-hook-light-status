@@ -23,9 +23,12 @@ const COLLECTOR_TOKEN = "填 server/env.json 里的 collectorToken";
 对应关系：
 
 ```text
-DEVICE_ID=desk-light-01
-WLED Device Topic=wled/desk-light-01
-server 发布 topic=wled/desk-light-01/api
+DEVICE_ID=<deviceId>
+WLED Device Topic=wled/<deviceId>
+server 发布 topic=wled/<deviceId>/api
+
+例如：
+DEVICE_ID=desk-light-01 -> WLED Device Topic=wled/desk-light-01
 ```
 
 远程部署时，把 `SERVER_URL` 改成你的 server 地址。

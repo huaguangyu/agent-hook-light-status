@@ -295,6 +295,14 @@ WLED 的 **Device Topic 不要带 `/api`**。
 正确：
 
 ```text
+WLED Device Topic: wled/<deviceId>
+server 发布 topic:   wled/<deviceId>/api
+```
+
+示例：
+
+```text
+deviceId=desk-light-01
 WLED Device Topic: wled/desk-light-01
 server 发布 topic:   wled/desk-light-01/api
 ```
@@ -302,10 +310,10 @@ server 发布 topic:   wled/desk-light-01/api
 错误：
 
 ```text
-WLED Device Topic: wled/desk-light-01/api
+WLED Device Topic: wled/<deviceId>/api
 ```
 
-WLED 会自动监听 `<Device Topic>/api`。如果 Device Topic 已经带 `/api`，WLED 实际监听会变成 `wled/desk-light-01/api/api`，server 发到 `wled/desk-light-01/api` 就不会触发灯效。
+WLED 会自动监听 `<Device Topic>/api`。如果 Device Topic 已经带 `/api`，WLED 实际监听会变成 `wled/<deviceId>/api/api`，server 发到 `wled/<deviceId>/api` 就不会触发灯效。
 
 服务端配置保持：
 
@@ -323,18 +331,20 @@ MQTT 工具自测：
 
 ```text
 Subscribe: wled/#
-Publish topic: wled/desk-light-01/api
+Publish topic: wled/<deviceId>/api
 Payload: T=1&PL=1
 QoS: 0
 Retain: false
 ```
+
+例如 `deviceId=desk-light-01` 时，发布到 `wled/desk-light-01/api`。
 
 再依次测试 `T=1&PL=2`、`T=1&PL=3`、`T=1&PL=4`。如果消息能看到但灯不变，优先检查 Device Topic 是否误填了 `/api`，以及 WLED 是否已经保存对应 preset。
 
 ### 对接步骤
 
 1. **ESP32 刷 WLED 固件**：访问 `https://install.wled.me` 直接刷，或下载 release 的 bin。ESP32-C3 支持。
-2. **WLED 配置**：进 WLED 网页 UI → WiFi Settings 连 WiFi；配置 LED 类型、GPIO、灯珠数量和布局；→ Sync Settings → MQTT Connectivity 填 broker 地址和 Device Topic。多设备推荐按 `deviceId` 填，例如 `wled/desk-light-01`。
+2. **WLED 配置**：进 WLED 网页 UI → WiFi Settings 连 WiFi；配置 LED 类型、GPIO、灯珠数量和布局；→ Sync Settings → MQTT Connectivity 填 broker 地址和 Device Topic。多设备推荐按 `deviceId` 填 `wled/<deviceId>`，例如 `wled/desk-light-01`。
 3. **准备 MQTT broker**：本机装 mosquitto，或用 EMQX / 公共 broker 均可。
 4. **保存 WLED preset**：在每台 WLED 设备里保存 1-4 号 preset：`1=Agent Idle`、`2=Agent Thinking`、`3=Agent Busy`、`4=Agent Approval`。
 5. **服务端填 env.json**：

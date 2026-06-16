@@ -96,7 +96,7 @@ Config -> Sync Interfaces -> MQTT
 | Broker | `你的MQTT地址`，不要带 `tcp://` |
 | Port | `1883` |
 | Username / Password | 按 broker 实际填写 |
-| Device Topic | `wled/desk-light-01` |
+| Device Topic | `wled/<deviceId>`，例如 `wled/desk-light-01` |
 | Group Topic | `wled/all` |
 
 保存后，如果 WLED 提示需要重启，必须重启。
@@ -115,8 +115,10 @@ Config -> Sync Interfaces -> MQTT
 注意：
 
 ```text
-Device Topic 填 wled/desk-light-01
-不要填 wled/desk-light-01/api
+Device Topic 填 wled/<deviceId>
+不要填 wled/<deviceId>/api
+
+例如 `deviceId=desk-light-01` 时，才填 `wled/desk-light-01`。
 ```
 
 ## 5. 保存 WLED Preset
@@ -152,9 +154,11 @@ wled/#
 发布：
 
 ```text
-Topic: wled/desk-light-01/api
+Topic: wled/<deviceId>/api
 Payload: T=1&PL=1
 ```
+
+例如 `deviceId=desk-light-01` 时，发布到 `wled/desk-light-01/api`。
 
 灯应该切到 Preset 1。再测试：
 

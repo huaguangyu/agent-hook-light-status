@@ -14,8 +14,8 @@
 | 开发板 | ESP32-C3 Pro Mini |
 | 灯板 | 12 灯珠 WS2812B 环形灯珠 |
 | 固件 | WLED |
-| 默认 `deviceId` | `desk-light-01` |
-| WLED Device Topic | `wled/desk-light-01` |
+| 示例 `deviceId` | `desk-light-01` |
+| 示例 WLED Device Topic | `wled/desk-light-01` |
 
 WLED 里 LED 硬件参数按实际接线填写：
 
@@ -58,7 +58,7 @@ Config -> Sync Interfaces -> MQTT
 | MQTT Broker | `192.168.1.10` | 你的 MQTT broker 地址 |
 | MQTT Port | `1883` | broker 端口 |
 | MQTT User / Password | 按需填写 | broker 没鉴权可留空 |
-| Device Topic | `wled/desk-light-01` | 必须和 server 的 `deviceId` 对应 |
+| Device Topic | `wled/<deviceId>`，例如 `wled/desk-light-01` | 必须和 server 的 `deviceId` 对应 |
 
 Agent Light Server 默认 topic 模板是：
 
@@ -80,7 +80,13 @@ server 会发布到：
 wled/desk-light-01/api
 ```
 
-所以这盏 WLED 灯的 **Device Topic** 要填：
+所以这盏 WLED 灯的 **Device Topic** 模板是：
+
+```text
+wled/<deviceId>
+```
+
+例如 `deviceId=desk-light-01` 时才填：
 
 ```text
 wled/desk-light-01
@@ -89,10 +95,10 @@ wled/desk-light-01
 注意：Device Topic **不要**填成：
 
 ```text
-wled/desk-light-01/api
+wled/<deviceId>/api
 ```
 
-WLED 会自动监听 `<Device Topic>/api`。如果你在 Device Topic 里手动加了 `/api`，WLED 实际监听会变成 `wled/desk-light-01/api/api`，server 发到 `wled/desk-light-01/api` 时灯就不会响应。
+WLED 会自动监听 `<Device Topic>/api`。如果你在 Device Topic 里手动加了 `/api`，WLED 实际监听会变成 `wled/<deviceId>/api/api`，server 发到 `wled/<deviceId>/api` 时灯就不会响应。
 
 WLED MQTT 配置保存后，如果页面提示需要重启，必须重启 WLED 才会生效。
 
@@ -107,11 +113,13 @@ wled/#
 发布：
 
 ```text
-Topic:   wled/desk-light-01/api
+Topic:   wled/<deviceId>/api
 Payload: T=1&PL=1
 QoS:     0
 Retain:  false
 ```
+
+例如 `deviceId=desk-light-01` 时，发布到 `wled/desk-light-01/api`。
 
 如果 WLED 里已经保存了 Preset 1，灯应该切到 `Agent Idle`。
 
@@ -128,9 +136,9 @@ T=1&PL=4
 | 检查项 | 正确值 |
 | --- | --- |
 | Enable MQTT | 已勾选 |
-| Device Topic | `wled/desk-light-01`，不带 `/api` |
+| Device Topic | `wled/<deviceId>`，例如 `wled/desk-light-01`，不带 `/api` |
 | server `mqttTopic` | `wled/%s`，不带 `/api` |
-| 发布 topic | `wled/desk-light-01/api` |
+| 发布 topic | `wled/<deviceId>/api`，例如 `wled/desk-light-01/api` |
 | preset | 已保存 1-4 号 preset |
 | WLED 配置变更后 | 已重启 |
 
